@@ -81,6 +81,8 @@ create_page(char *fname, char *out)
 			  { sprintf(q, "&amp;"); q+=4; ++p; }
 			else if (*p == 0x3c)
 			  { sprintf(q, "&lt;"); q+=4; ++p; }
+			else if (*p == 0x3d)
+			  { sprintf(q, "&#61;"); q+=5; ++p; }
 			else if (*p == 0x3e)
 			  { sprintf(q, "&gt;"); q+=4; ++p; }
 			else
