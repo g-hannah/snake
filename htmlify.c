@@ -1,5 +1,7 @@
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <misclib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,29 +12,62 @@
 #define IBUF_SIZE	4096
 #define OBUF_SIZE	16384
 
-#define PREF_HEAD		"<h1>"
-#define PREF_HEAD_LEN		4
-#define PREF_HEAD_END		"</h1>"
-#define PREF_HEAD_END_LEN	5
-
 static int		fd, ofd;
 static struct stat	statb;
 static char		*IBUF = NULL, *OBUF = NULL, *TMP = NULL;
+static int		P_PARITY;
 
+static char		PARAGRAPH_TAG[256] = "<p>";
+static char		HEADING_TAG[256] = "<h1>";
+static char		HEADING_CLOSE[256] = "";
+
+void usage(int) __attribute__ ((__noreturn__));
+int get_heading_close(char *, char *) __nonnull ((1,2)) __wur;
 int create_page(char *fname, char *out) __nonnull ((1,2)) __wur;
 
 int
 main(int argc, char *argv[])
 {
-	if (argc < 2)
-	  { fprintf(stderr, "htmlify <file> <outfile>\n"); exit(0xff); }
-	else if (argc < 3)
-	  { fprintf(stderr, "htmlify <file> <outfile>\n"); exit(0xff); }
+	static char		c;
 
-	if (create_page(argv[1], argv[2]) < 0)
+	while ((c = getopt(argc, argv, "p:H:h")) != -1)
+	  {
+		switch(c)
+		  {
+			case(0x70):
+			assert(strlen(optarg) < 256);
+			strncpy(PARAGRAPH_TAG, optarg, 256);
+			break;
+			case(0x48):
+			assert(strlen(optarg) < 256);
+			strncpy(HEADING_TAG, optarg, 256);
+			break;
+			case(0x68):
+			usage(EXIT_SUCCESS);
+			break;
+			default:
+			usage(EXIT_FAILURE);
+		  }
+	  }
+
+	if (get_heading_close(HEADING_TAG, HEADING_CLOSE) == -1)
+	  { fprintf(stderr, "main() > get_heading_close()\n"); exit(0xff); }
+
+	fprintf(stdout,
+		"Paragraph tag: %s\n"
+		"Heading tag: %s\n"
+		"Heading close: %s\n",
+		PARAGRAPH_TAG,
+		HEADING_TAG,
+		HEADING_CLOSE);
+
+	if (!argv[optind] || !argv[optind+1])
+		usage(EXIT_FAILURE);
+
+	if (create_page(argv[optind], argv[optind+1]) < 0)
 	  { fprintf(stderr, "main() > create_page()"); }
 
-	exit(0);
+	exit(EXIT_SUCCESS);
 }
 
 int
@@ -68,10 +103,11 @@ create_page(char *fname, char *out)
 	
 	tsize = statb.st_size;
 	i &= ~i;
-	sprintf(OBUF, "<p>");
+	sprintf(OBUF, "%s", PARAGRAPH_TAG);
+	P_PARITY = 1;
 
 	n = read_n(fd, IBUF, statb.st_size);
-	q = (OBUF + 3);
+	q = (OBUF + strlen(PARAGRAPH_TAG));
 	p = IBUF;
 
 	while (tsize > 0)
@@ -99,34 +135,33 @@ create_page(char *fname, char *out)
 						  {
 							while (*a != 0x3c && a > (OBUF + 1))
 								--a;
-							if (strncasecmp("<p>", a, 3) != 0)
+							if (strncasecmp(PARAGRAPH_TAG, a, strlen(PARAGRAPH_TAG)) != 0)
 							  { --a; continue; }
 							else
 							  { break; }
 						  }
 
-						a += 3;
+						a += strlen(PARAGRAPH_TAG);
 						if (!(TMP = malloc((q - a)+1)))
 							return(-1);
 
 						strncpy(TMP, a, (q - a));
 						TMP[(q - a)] = 0;
-						a -= 3;
+						a -= strlen(PARAGRAPH_TAG);
 
-						strcpy(a, PREF_HEAD);
-						//sprintf(a, "%s", PREF_HEAD);
-						a += PREF_HEAD_LEN;
+						strcpy(a, HEADING_TAG);
+						P_PARITY = 0;
+						a += strlen(HEADING_TAG);
 
-						strcpy(a, TMP);
-						//snprintf(a, strlen(TMP), "%s", TMP);
+						strncpy(a, TMP, strlen(TMP));
 						a += strlen(TMP);
 						free(TMP);
 						q = a;
 
-						sprintf(q, "%s\n<p>",PREF_HEAD_END);
-						//sprintf(q, "%s\n", PREF_HEAD_END);
+						sprintf(q, "%s\n%s", HEADING_CLOSE, PARAGRAPH_TAG);
+						P_PARITY = 1;
 
-						q += (PREF_HEAD_END_LEN + 4);
+						q += (strlen(HEADING_CLOSE) + strlen(PARAGRAPH_TAG) + 1);
 
 						while ((*p == 0x0a || *p == 0x0d) && p < (IBUF + statb.st_size))
 							++p;
@@ -136,8 +171,8 @@ create_page(char *fname, char *out)
 					  }
 					else // nlcnt != 0
 					  {
-						sprintf(q, "</p>\n<p>");
-						q += 8;
+						sprintf(q, "</p>\n%s", PARAGRAPH_TAG);
+						q += (5 + strlen(PARAGRAPH_TAG));
 						while ((*p == 0x0a || *p == 0x0d) && p < (IBUF + statb.st_size))
 							++p;
 						nlcnt &= ~nlcnt;
@@ -208,6 +243,8 @@ create_page(char *fname, char *out)
 			  }
 		  }
 
+		if (P_PARITY == 1)
+		  { strncpy(q, "</p>", 4); q += 4; }
 		*q = 0;
 		write_n(ofd, OBUF, (q - OBUF));
 		tsize -= n;
@@ -218,4 +255,42 @@ create_page(char *fname, char *out)
 	free(IBUF);
 	free(OBUF);
 	return(0);
+}
+
+int
+get_heading_close(char *TAG, char *CTAG)
+{
+	static char		*p = NULL, *q = NULL;
+
+	p = TAG;
+	q = CTAG;
+
+	strncpy(q, "</h", 3);
+	q += 3;
+
+	while (! isdigit(*p) && p < (TAG + strlen(TAG)))
+		++p;
+
+	if (! isdigit(*p))
+		return(-1);
+
+	*q++ = *p++;
+	strncpy(q, ">", 1);
+	++q;
+	*q = 0;
+
+	return(0);
+}
+
+void
+usage(int exit_type)
+{
+	fprintf(stderr,
+		"htmlify <options> <in file> <out file>\n"
+		"\n"
+		" -p	specify paragraph tag, e.g., \"<p id=\"id_of_p\">\"\n"
+		" -H	specify heading tag (default is <h1>)\n"
+		" -h	display this information menu\n");
+
+	exit(exit_type);
 }
