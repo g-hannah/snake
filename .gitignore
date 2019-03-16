@@ -1,6 +1,0 @@
-.*
-!.gitignore
-*.o
-htmlify
-*.txt
-test*
