@@ -2,8 +2,7 @@
 
 #define log_mutex(str, m) \
 {\
-	if (DEBUG)							\
-	fprintf(debug_fp, "%sing %s @ line %d\n", (str), (m), __LINE__);	\
+	;	\
 }
 
 int			DEBUG;
@@ -406,8 +405,6 @@ main(int argc, char *argv[])
 		  {
 			case(0x44):
 			DEBUG = 1;
-			if (!(debug_fp = fopen("./debug.txt", "r+")))
-			  { log_err("main: failed to open debug file"); goto fail; }
 			break;
 			default:
 			fprintf(stderr, "unknown option...\n");
@@ -609,7 +606,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(1);
+	change_level(2);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
@@ -2068,6 +2065,23 @@ level_two(void)
 				((i >= row_8 && i < row_4) ||
 				(i <= ws.ws_row-row_8 && i > ws.ws_row-row_4)))
 					matrix[i][j] = -1;
+			else if (i == row_8 &&
+				(j >= (ws.ws_col/3) && j < ((ws.ws_col/3)*2)))
+					matrix[i][j] = -1;
+			else if ((j == (ws.ws_col/3) || j == ((ws.ws_col/3)*2)) &&
+				(i >= row_8 && i < (row_8 + row_4)))
+					matrix[i][j] = -1;
+			else if (i == (row_4 + row_8) &&
+				((j <= (ws.ws_col/3) && j > ((ws.ws_col/3)-(ws.ws_col/8))) ||
+				(j >= ((ws.ws_col/3)*2) && j < (((ws.ws_col/3)*2)+(ws.ws_col/8)))))
+					matrix[i][j] = -1;
+			else if ((j == ((ws.ws_col/3)-(ws.ws_col/8)) || (j == (((ws.ws_col/3)*2)+(ws.ws_col/8)))) &&
+				(i >= (row_8 + row_4) && i < (((ws.ws_row/2) + row_8))))
+					matrix[i][j] = -1;
+			else if (i == ((ws.ws_row/2) + row_8) &&
+				((j >= ((ws.ws_col/3)-(ws.ws_col/8)) && j < ((ws.ws_col/2)-(ws.ws_col/8))) ||
+				(j <= (((ws.ws_col/3)*2)+(ws.ws_col/8)) && j > ((ws.ws_col/2)+(ws.ws_col/8)))))
+					matrix[i][j] = -1;
 			else
 				matrix[i][j] = 0;
 		  }
@@ -2089,38 +2103,6 @@ level_two(void)
 		reset_right();
 		up(1);
 	  }
-
-	/*clear_screen(BG_COL);
-	draw_line_x(BR_COL, ws.ws_col-1, 0);
-	draw_line_y(BR_COL, ws.ws_row, 1);
-	draw_line_x(BR_COL, ws.ws_col-1, 1);
-	draw_line_y(BR_COL, ws.ws_row, 0);
-
-	reset_cursor();
-
-	right(col_8);
-	up(ws.ws_row-row_8);
-	draw_line_x(BR_COL, col_4, 0);
-	reset_right();
-	right(ws.ws_col-col_8-1);
-	draw_line_x(BR_COL, col_4, 1);
-	reset_right();
-	right(col_8);
-	draw_line_y(BR_COL, row_8, 0);
-	up(row_8);
-	reset_right();
-	right(ws.ws_col-col_8-1);
-	draw_line_y(BR_COL, row_8, 0);
-	reset_up();
-	up(row_8);
-	draw_line_y(BR_COL, row_8, 1);
-	down(row_8);
-	draw_line_x(BR_COL, col_4, 1);
-	reset_right();
-	right(col_8);
-	draw_line_x(BR_COL, col_4, 0);
-	left(col_4);
-	draw_line_y(BR_COL, row_8, 1);*/
 
 	pthread_mutex_unlock(&mutex);
 
@@ -2190,47 +2172,6 @@ level_three(void)
 		up(1);
 	  }
 
-	/*draw_line_x(BR_COL, ws.ws_col-1, 0);
-	draw_line_y(BR_COL, ws.ws_row, 1);
-	draw_line_x(BR_COL, ws.ws_col-1, 1);
-	draw_line_y(BR_COL, ws.ws_row, 0);
-
-	reset_cursor();
-
-	right(10);
-	up(ws.ws_row-5);
-	draw_line_x(BR_COL, 20, 0);
-	reset_right();
-	right(ws.ws_col-11);
-	draw_line_x(BR_COL, 20, 1);
-	reset_right();
-	right(20);
-	draw_line_y(BR_COL, 5, 0);
-	up(5);
-	reset_right();
-	right(ws.ws_col-11-10);
-	draw_line_y(BR_COL, 5, 0);
-	reset_up();
-	up(5);
-	draw_line_y(BR_COL, 5, 1);
-	down(5);
-	reset_right();
-	right(ws.ws_col-11);
-	draw_line_x(BR_COL, 20, 1);
-	reset_right();
-	right(10);
-	draw_line_x(BR_COL, 20, 0);
-	left(10);
-	draw_line_y(BR_COL, 5, 1);
-	reset_cursor();
-	up((ws.ws_row/2)+(ws.ws_row/8));
-	right(30);
-	draw_line_x(BR_COL, ((ws.ws_col-11-20)-30), 0);
-	reset_cursor();
-	up((ws.ws_row/2)-(ws.ws_row/8));
-	right(30);
-	draw_line_x(BR_COL, ((ws.ws_col-11-20)-30), 0);*/
-
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
@@ -2246,6 +2187,13 @@ void
 level_four(void)
 {
 	int	i, j;
+	int	row_4, row_8;
+	int	col_4, col_8;
+
+	row_4 = (ws.ws_row/4);
+	row_8 = (ws.ws_row/8);
+	col_4 = (ws.ws_col/4);
+	col_8 = (ws.ws_col/8);
 
 	BG_COL = TEAL;
 	BR_COL = BLACK;
@@ -2255,11 +2203,9 @@ level_four(void)
 
 	pthread_mutex_lock(&mutex);
 
-	clear_screen(BG_COL);
-
 	for (i = 0; i < ws.ws_row; ++i)
 	  {
-		for (j = 0; j < ws.ws_col; ++j)
+		for (j = 0; j < ws.ws_col-1; ++j)
 		  {
 			if (i == 0)
 				matrix[i][j] = -1;
@@ -2269,24 +2215,31 @@ level_four(void)
 				matrix[i][j] = -1;
 			else if (j == ws.ws_col-2)
 				matrix[i][j] = -1;
-			else if (i == (ws.ws_row-5) &&
-			     ((j >= 5 && j < 15) || (j >= (ws.ws_col-6-10) && j < (ws.ws_col-6))))
-				matrix[i][j] = -1;
-			else if (i == 5 &&
-			     ((j >= 5 && j < 15) || (j >= (ws.ws_col-6-10) && j < (ws.ws_col-6))))
-				matrix[i][j] = -1;
-			else if (j == 5 &&
-			     ((i <= (ws.ws_row-5) && i > (ws.ws_row-10)) || (i >= 5 && i < 10)))
-				matrix[i][j] = -1;
-			else if (j == (ws.ws_col-6) &&
-			     ((i <= (ws.ws_row-5) && i > (ws.ws_row-10)) || (i >= 5 && i < 10)))
-			    	matrix[i][j] = -1;
-			else if (i == (ws.ws_row/2) && j >= ((ws.ws_col/2)-(ws.ws_col/8)) &&
-			     (j < ((ws.ws_col/2)-(ws.ws_col/8)+(ws.ws_col/4))))
-				matrix[i][j] = -1;
-			else if (j == (ws.ws_col/2) && i >= ((ws.ws_row/2)-(ws.ws_row/8)) &&
-			     (i < ((ws.ws_row/2)-(ws.ws_row/8)+(ws.ws_row/4))))
-				matrix[i][j] = -1;
+			else if ((i == ws.ws_row-row_8 || i == row_8) &&
+				((j >= col_8 && j < col_4) ||
+				(j > ws.ws_col-col_4 && j <= ws.ws_col-col_8-1)))
+					matrix[i][j] = -1;
+			else if ((j == col_8 || j == ws.ws_col-col_8-1) &&
+				((i >= row_8 && i < row_4) ||
+				(i <= ws.ws_row-row_8 && i > ws.ws_row-row_4)))
+					matrix[i][j] = -1;
+			else if (i == row_8 &&
+				(j >= (ws.ws_col/3) && j < ((ws.ws_col/3)*2)))
+					matrix[i][j] = -1;
+			else if ((j == (ws.ws_col/3) || j == ((ws.ws_col/3)*2)) &&
+				(i >= row_8 && i < (row_8 + row_4)))
+					matrix[i][j] = -1;
+			else if (i == (row_4 + row_8) &&
+				((j <= (ws.ws_col/3) && j > ((ws.ws_col/3)-(ws.ws_col/8))) ||
+				(j >= ((ws.ws_col/3)*2) && j < (((ws.ws_col/3)*2)+(ws.ws_col/8)))))
+					matrix[i][j] = -1;
+			else if ((j == ((ws.ws_col/3)-(ws.ws_col/8)) || (j == (((ws.ws_col/3)*2)+(ws.ws_col/8)))) &&
+				(i >= (row_8 + row_4) && i < (((ws.ws_row/2) + row_8))))
+					matrix[i][j] = -1;
+			else if (i == ((ws.ws_row/2) + row_8) &&
+				((j >= ((ws.ws_col/3)-(ws.ws_col/8)) && j < ((ws.ws_col/2)-(ws.ws_col/8))) ||
+				(j <= (((ws.ws_col/3)*2)+(ws.ws_col/8)) && j > ((ws.ws_col/2)+(ws.ws_col/8)))))
+					matrix[i][j] = -1;
 			else
 				matrix[i][j] = 0;
 		  }
@@ -2294,46 +2247,23 @@ level_four(void)
 
 	reset_right();
 	reset_up();
+	clear_screen(BG_COL);
 
-	draw_line_x(BR_COL, ws.ws_col-1, 0);
-	draw_line_y(BR_COL, ws.ws_row, 1);
-	draw_line_x(BR_COL, ws.ws_col-1, 1);
-	draw_line_y(BR_COL, ws.ws_row, 0);
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col-1; ++j)
+		  {	
+			if (matrix[i][j] == -1)
+				draw_line_x(BR_COL, 1, 0);
+			else
+				draw_line_x(BG_COL, 1, 0);
+		  }
 
-	reset_cursor();
-	up(ws.ws_row-5);
-	right(5);
-	draw_line_x(BR_COL, 10, 0);
-	reset_right();
-	right(ws.ws_col-6);
-	draw_line_x(BR_COL, 10, 1);
-	reset_right();
-	right(5);
-	draw_line_y(BR_COL, 5, 0);
-	up(5);
-	reset_right();
-	right(ws.ws_col-6);
-	draw_line_y(BR_COL, 5, 0);
-	reset_up();
-	up(5);
-	draw_line_y(BR_COL, 5, 1);
-	down(5);
-	draw_line_x(BR_COL, 10, 1);
-	reset_right();
-	right(5);
-	draw_line_x(BR_COL, 10, 0);
-	left(10);
-	draw_line_y(BR_COL, 5, 1);
+		reset_right();
+		up(1);
+	  }
 
 	reset_cursor();
-
-	up(ws.ws_row/2);
-	right((ws.ws_col/2)-(ws.ws_col/8));
-	draw_line_x(BR_COL, (ws.ws_col/4), 0);
-	left(ws.ws_col/8);
-	reset_up();
-	up((ws.ws_row/2)-(ws.ws_row/8));
-	draw_line_y(BR_COL, (ws.ws_row/4), 1);
 
 	pthread_mutex_unlock(&mutex);
 
@@ -2506,6 +2436,7 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 	if (h->sl < maxr)
 	  {
+		debug("shifting head left");
 		while (h->r + h->sl >= maxr || matrix[h->u][h->r] == -1)
 		  { --(h->r); --(t->r); }
 	  }
@@ -2518,7 +2449,8 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	h->h->d = 0x6c;
 	dir = 0x72;
 
-	while (matrix[head_u][head_r] == -1)
+	debug("finding best starting direction");
+	do
 	  {
 		delta_d &= ~delta_d;
 		delta_u &= ~delta_u;
@@ -2528,25 +2460,21 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 		save_u = head_u;
 		save_r = head_r;
 
-		--head_r;
 		while (matrix[head_u][head_r] != -1 && head_r > 0)
 		  { ++delta_l; --head_r; }
 
 		head_r = save_r;
 
-		++head_r;
 		while (matrix[head_u][head_r] != -1 && head_r < ws.ws_col-1)
 		  { ++delta_r; ++head_r; }
 
 		head_r = save_r;
 
-		--head_u;
 		while (matrix[head_u][head_r] != -1 && head_u > 0)
 		  { ++delta_d; --head_u; }
 
 		head_u = save_u;
 
-		++head_u;
 		while (matrix[head_u][head_r] != -1 && head_u < ws.ws_row)
 		  { ++delta_u; ++head_u; }
 
@@ -2572,35 +2500,9 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 			dir = 0x72;
 			break;
 		  }
+	  } while (0);
 
-		/*switch(dir)
-		  {
-			case(0x75):
-			if ((delta_u/2) == 0)
-				++head_u;
-			else
-				head_u += (delta_u/2);
-			break;
-			case(0x64):
-			if ((delta_d/2) == 0)
-				--head_u;
-			else
-				head_u -= (delta_d/2);
-			break;
-			case(0x6c):
-			if ((delta_l/2) == 0)
-				--head_r;
-			else
-				head_r -= (delta_l/2);
-			break;
-			case(0x72):
-			if ((delta_r/2) == 0)
-				++head_r;
-			else
-				head_r += (delta_r/2);
-			break;
-		  }*/
-	  }
+	debug("got backwards direction: %c", dir);
 
 	/* so now the head of snake should be in an acceptable
 	 * starting place. Now we need to nagivate the matrix
@@ -2618,6 +2520,7 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	matrix[head_u][head_r] = 1;
 	t->t->l = slen = 1;
 
+	debug("finding acceptable path in screen matrix");
 	while (slen < h->sl)
 	  {
 		while (matrix[head_u+1][head_r] != -1 &&
@@ -3338,37 +3241,37 @@ void
 log_err(char *fmt, ...)
 {
 	va_list		args;
-	char		*tmp = NULL;
+	char		*_tmp = NULL;
 
-	tmp = calloc(MAXLINE, 1);
-	memset(&tmp, 0, MAXLINE);
+	_tmp = calloc(MAXLINE, 1);
+	memset(_tmp, 0, MAXLINE);
 
 	va_start(args, fmt);
-	vsprintf(tmp, fmt, args);
+	vsprintf(_tmp, fmt, args);
 	va_end(args);
 
-	fprintf(stderr, "%s (%s)\n", tmp, strerror(errno));
+	fprintf(stderr, "%s (%s)\n", _tmp, strerror(errno));
 
-	if (tmp != NULL) { free(tmp); tmp = NULL; }
+	if (_tmp != NULL) { free(_tmp); _tmp = NULL; }
 	return;
 }
 
 void
 debug(char *fmt, ...)
 {
-	char	*tmp = NULL;
+	char	*_tmp = NULL;
 	va_list	args;
 
 	if (DEBUG)
 	  {
-		tmp = calloc(MAXLINE, 1);
-		memset(tmp, 0, MAXLINE);
+		_tmp = calloc(MAXLINE, 1);
+		memset(_tmp, 0, MAXLINE);
 		va_start(args, fmt);
-		vsprintf(tmp, fmt, args);
+		vsprintf(_tmp, fmt, args);
 		va_end(args);
-		strip_crnl(tmp);
-		fprintf(stderr, "\e[48;5;0m\e[38;5;9m-+[debug]+- %s\e[m\n", tmp);
-		if (tmp != NULL) { free(tmp); tmp = NULL; }
+		strip_crnl(_tmp);
+		fprintf(stderr, "\e[48;5;0m\e[38;5;9m-+[debug]+- %s\e[m\n", _tmp);
+		if (_tmp != NULL) { free(_tmp); _tmp = NULL; }
 	  }
 }
 
