@@ -24,6 +24,8 @@ char			save_name[32];
 
 struct termios		nterm, oterm;
 struct winsize		ws;
+int			row_2, row_3, row_23, row_4, row_8, row_16, row_max;
+int			col_2, col_3, col_23, col_4, col_8, col_16, col_max;
 struct Snake_Head	shead;
 struct Snake_Tail	stail;
 Food			f;
@@ -59,6 +61,7 @@ char			*SN_COL = NULL;
 char			*BR_COL = NULL;
 char			*HD_COL = NULL;
 char			*FD_COL = NULL;
+char			*MENU_BG_COL = NULL;
 int			DEFAULT_USLEEP_TIME;
 int			USLEEP_TIME;
 int			FOOD_REFRESH_TIME;
@@ -117,7 +120,7 @@ static void level_one(void);
 static void level_two(void);
 static void level_three(void);
 static void level_four(void);
-//static void level_five(void);
+static void level_five(void);
 
 //static char *get_colour(char *) __nonnull ((1)) __wur;
 
@@ -248,6 +251,8 @@ __attribute__ ((constructor)) snake_init(void)
 
 	FOOD_REFRESH_TIME = 12;
 
+	MENU_BG_COL = DARK_GREY;
+
 	return;
 
 	fail:
@@ -330,8 +335,24 @@ main(int argc, char *argv[])
 	minu = 1;
 	minr = 1;
 
+	row_3 = (ws.ws_row/3);
+	row_23 = (row_3 * 2);
+	row_2 = (ws.ws_row/2);
+	row_4 = (row_2/2);
+	row_8 = (row_4/2);
+	row_16 = (row_8/2);
+	row_max = ws.ws_row;
+
+	col_3 = (ws.ws_col/3);
+	col_23 = (col_3 * 2);
+	col_2 = (ws.ws_col/2);
+	col_4 = (col_2/2);
+	col_8 = (col_4/2);
+	col_16 = (col_8/2);
+	col_max = (ws.ws_col-1);
+
 	USLEEP_TIME = get_default_sleep_time();
-	clear_screen(BLACK);
+	clear_screen(DARK_GREY);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
 	  { log_err("main: get_high_scores error"); goto fail; }
@@ -339,7 +360,7 @@ main(int argc, char *argv[])
 	title_screen();
 	up(ws.ws_row/2);
 	right((ws.ws_col/2)-(strlen("Enter Name")/2));
-	printf("%s%sEnter name\e[m", BLACK, TRED);
+	printf("%s%sEnter name\e[m", MENU_BG_COL, TRED);
 	reset_right();
 	down(1);
 	right(ws.ws_col/2);
@@ -365,7 +386,7 @@ main(int argc, char *argv[])
 			player->name[i] = 0;
 			clear_line(BLACK);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", BLACK, TPURPLE, player->name);
+			printf("%s%s%s\e[m", MENU_BG_COL, TPURPLE, player->name);
 		  }
 		else
 		  {
@@ -374,7 +395,7 @@ main(int argc, char *argv[])
 			player->name[i++] = c;
 			reset_right();
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", BLACK, TPURPLE, player->name);
+			printf("%s%s%s\e[m", MENU_BG_COL, TPURPLE, player->name);
 		  }
 	  }
 	player->name[i] = 0;
@@ -407,7 +428,8 @@ main(int argc, char *argv[])
 			DEBUG = 1;
 			break;
 			default:
-			fprintf(stderr, "unknown option...\n");
+			errno = EINVAL;
+			log_err("unknown option...");
 			exit(EXIT_FAILURE);
 		  }
 	  }
@@ -418,12 +440,12 @@ main(int argc, char *argv[])
 
 	/* allocate memory for screen matrix */
 	if (!(matrix = calloc(ws.ws_row, sizeof(int *))))
-	  { fprintf(stderr, "main: failed to alloc memory for matrix (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("main: calloc error (matrix)"); goto fail; }
 	for (i = 0; i < ws.ws_row; ++i)
 	  {
 		matrix[i] = NULL;
 		if (!(matrix[i] = calloc(ws.ws_col, sizeof(int))))
-		  { fprintf(stderr, "main: failed to create matrix (%s)\n", strerror(errno)); goto fail; }
+		  { log_err("main: matrix creation failed (calloc)"); goto fail; }
 
 		for (j = 0; j < ws.ws_col; ++j)
 			matrix[i][j] = 0;
@@ -451,6 +473,7 @@ main(int argc, char *argv[])
 
 			pthread_kill(tid_food, SIGUSR2);
 			pthread_kill(tid_dir, SIGQUIT);
+			usleep(5000);
 
 			gameover &= ~gameover;
 
@@ -482,7 +505,7 @@ main(int argc, char *argv[])
 			printf("%s%sPlay\e[m", RED, TWHITE);
 			reset_right();
 			right(((ws.ws_col/3)*2) - l2/2);
-			printf("%s%sQuit\e[m", BLACK, TWHITE);
+			printf("%s%sQuit\e[m", MENU_BG_COL, TWHITE);
 			reset_right();
 			reset_up();
 
@@ -533,7 +556,7 @@ main(int argc, char *argv[])
 					printf("%s%sPlay\e[m", RED, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
-					printf("%s%sQuit\e[m", BLACK, TWHITE);
+					printf("%s%sQuit\e[m", MENU_BG_COL, TWHITE);
 					play_again = 1;
 					quit &= ~quit;
 					for (i = 0; i < 4; ++i) choice[i] = 0;
@@ -544,7 +567,7 @@ main(int argc, char *argv[])
 				  {
 					up((ws.ws_row/2)-(ws.ws_row/16));
 					right((ws.ws_col/3)-l1/2);
-					printf("%s%sPlay\e[m", BLACK, TWHITE);
+					printf("%s%sPlay\e[m", MENU_BG_COL, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", RED, TWHITE);
@@ -607,7 +630,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(1);
+	change_level(5);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
@@ -1724,21 +1747,21 @@ game_over(void)
 	char		*beat_own_score_string = "You beat your previous score!";
 	char		*digits = "0123456789";
 	int		char_delay;
-	int		game_over_text[8][57] =
+	int		game_over_text[8][58] =
 	  {
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-		{ 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1 },
-		{ 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-		{ 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0 },
-		{ 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1 }
+		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0 },
+		{ 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2 },
+		{ 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2 },
+		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2 },
+		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 2, 1, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0 }
 	  };
 
 	char_delay = 90000;
 
-	clear_screen(BLACK);
+	clear_screen(MENU_BG_COL);
 	if (check_current_player_score(player, player_list->first, player_list->last) < 0)
 	  { log_err("game_over: check_current_player error"); goto fail; }
 
@@ -1752,28 +1775,30 @@ game_over(void)
 	reset_cursor();
 
 	up((ws.ws_row/2)+(ws.ws_row/4)+(ws.ws_row/8));
-	center_x((57/2), 0);
+	center_x((58/2), 0);
 
 	for (i = 0; i < 8; ++i)
 	  {
-		for (j = 0; j < 57; ++j)
+		for (j = 0; j < 58; ++j)
 		  {
 			if (game_over_text[i][j] == 1)
 				draw_line_x(RED, 1, 0);
+			else if (game_over_text[i][j] == 2)
+				draw_line_x(MENU_BG_COL, 1, 0);
 			else
 				draw_line_x(BLACK, 1, 0);
 		  }
 
 		reset_right();
 		down(1);
-		center_x((57/2), 0);
+		center_x((58/2), 0);
 	  }
 
 	reset_right();
 	down(1);
 
 	right((ws.ws_col/2) - (strlen(game_over_string)/2));
-	printf("%s%s", BLACK, TWHITE);
+	printf("%s%s", MENU_BG_COL, TWHITE);
 	for (i = 0; i < strlen(game_over_string); ++i)
 	  { fputc(game_over_string[i], stdout); usleep(char_delay); }
 
@@ -1784,7 +1809,7 @@ game_over(void)
 	if (NEW_BEST_PLAYER)
 	  {
 		right((ws.ws_col/2)-(strlen(beat_record_string)/2) - 4);
-		printf("%s%s", BLACK, TWHITE);
+		printf("%s%s", MENU_BG_COL, TWHITE);
 		for (i = 0; i < strlen(beat_record_string); ++i)
 		  { fputc(beat_record_string[i], stdout); usleep(char_delay); }
 		printf("\e[m");
@@ -1794,7 +1819,7 @@ game_over(void)
 	else if (BEAT_OWN_SCORE)
 	  {
 		right((ws.ws_col/2)-(strlen(beat_own_score_string)/2) - 4);
-		printf("%s%s", BLACK, TWHITE);
+		printf("%s%s", MENU_BG_COL, TWHITE);
 		for (i = 0; i < strlen(beat_own_score_string); ++i)
 		  { fputc(beat_own_score_string[i], stdout); usleep(char_delay); }
 		reset_right();
@@ -1802,7 +1827,7 @@ game_over(void)
 	  }
 
 	right((ws.ws_col/2)-(strlen(your_score_string)/2)-4);
-	printf("%s%s", BLACK, TDARK_GREEN);
+	printf("%s%s", MENU_BG_COL, TDARK_GREEN);
 	for (i = 0; i < strlen(your_score_string); ++i)
 	  { fputc(your_score_string[i], stdout); usleep(char_delay); }
 
@@ -1853,7 +1878,7 @@ game_over(void)
 	reset_right();
 	down(1);
 	right((ws.ws_col/2)-(strlen(your_num_eaten_string)/2)-4);
-	printf("%s%s", BLACK, TDARK_GREEN);
+	printf("%s%s", MENU_BG_COL, TDARK_GREEN);
 	for (i = 0; i < strlen(your_num_eaten_string); ++i)
 	  { fputc(your_num_eaten_string[i], stdout); usleep(char_delay); }
 
@@ -1935,9 +1960,9 @@ change_level(int next_level)
 		case(4):
 		level_four();
 		break;
-		/*case(5):
+		case(5):
 		level_five();
-		break;*/
+		break;
 		default:
 		return;
 	  }
@@ -2024,7 +2049,7 @@ level_two(void)
 	int		col_4;
 	int		row_8;
 	int		col_8;
-	//int		row_16;
+	int		row_16;
 	//int		col_16;
 
 	BR_COL = BLACK;
@@ -2035,7 +2060,7 @@ level_two(void)
 
 	row_4 = (ws.ws_row/4);
 	row_8 = (ws.ws_row/8);
-	//row_16 = (ws.ws_row/16);
+	row_16 = (ws.ws_row/16);
 
 	col_4 = (ws.ws_col/4);
 	col_8 = (ws.ws_col/8);
@@ -2070,7 +2095,8 @@ level_two(void)
 				(j >= (ws.ws_col/3) && j < ((ws.ws_col/3)*2)))
 					matrix[i][j] = -1;
 			else if ((j == (ws.ws_col/3) || j == ((ws.ws_col/3)*2)) &&
-				(i >= row_8 && i < (row_8 + row_4)))
+				((i >= row_8 && i < (row_8 + row_16)) ||
+				(i <= (row_8 + row_4) && i > ((row_8 + row_4)-row_16))))
 					matrix[i][j] = -1;
 			else if (i == (row_4 + row_8) &&
 				((j <= (ws.ws_col/3) && j > ((ws.ws_col/3)-(ws.ws_col/8))) ||
@@ -2188,13 +2214,6 @@ void
 level_four(void)
 {
 	int	i, j;
-	int	row_4, row_8;
-	int	col_4, col_8;
-
-	row_4 = (ws.ws_row/4);
-	row_8 = (ws.ws_row/8);
-	col_4 = (ws.ws_col/4);
-	col_8 = (ws.ws_col/8);
 
 	BG_COL = TEAL;
 	BR_COL = BLACK;
@@ -2277,10 +2296,66 @@ level_four(void)
 }
 
 // LEVEL_FIVE
-/*void
+void
 level_five(void)
 {
-}*/
+	int		i, j;
+	
+	BG_COL = SKY_BLUE;
+	BR_COL = BLACK;
+	SN_COL = LEMON;
+	HD_COL = DARK_RED;
+	FD_COL = GREEN;
+
+	pthread_mutex_lock(&mutex);
+
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col-1; ++j)
+		  {
+			if (i == 0 || i == (ws.ws_row-1) || j == 0 || j == (ws.ws_col-1))
+				matrix[i][j] = -1;
+			else if ((i == (row_2 - row_16) || i == (row_2 + row_16)) &&
+				((j >= col_4 && j < (col_2 - col_8 + (col_16/2))) ||
+				(j <= (col_max - col_4) && j > (col_2 + col_8 - (col_16/2)))))
+					matrix[i][j] = -1;
+			else if ((j == (col_2 - col_8 + (col_16/2)) || j == (col_2 + col_8 - (col_16/2))) &&
+				((i >= (row_2 + row_16) && i < (row_2 + row_4)) ||
+				(i <= (row_2 - row_16) && i > (row_2 - row_4))))
+					matrix[i][j] = -1;
+			else
+				matrix[i][j] = 0;
+		  }
+	  }
+
+	reset_right();
+	reset_up();
+
+	clear_screen(BG_COL);
+
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col-1; ++j)
+		  {
+			if (matrix[i][j] == -1)
+				draw_line_x(BR_COL, 1, 0);
+			else
+				draw_line_x(BG_COL, 1, 0);
+		  }
+
+		reset_right();
+		up(1);
+	  }
+
+	pthread_mutex_unlock(&mutex);
+
+	write_stats();
+
+	reset_snake(&shead, &stail);
+	USLEEP_TIME -= 10000;
+
+	
+}
 
 // RESET_SNAKE
 void
@@ -3004,16 +3079,16 @@ int
 title_screen(void)
 {
 	int	i, j;
-	int	game_title[8][34] = 
+	int	game_title[8][35] = 
 	  {
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-	    { 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1 },
-	    { 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1 }
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2 },
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 2, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2 },
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 }
 	  };
 
 	if (show_hall_of_fame(player_list->first, player_list->last) == -1)
@@ -3025,20 +3100,22 @@ title_screen(void)
 	reset_up();
 
 	up((ws.ws_row/2)+(ws.ws_row/4)+(ws.ws_row/8));
-	center_x((34/2), 0);
+	center_x((35/2), 0);
 	for (i = 0; i < 8; ++i)
 	  {
-		for (j = 0; j < 34; ++j)
+		for (j = 0; j < 35; ++j)
 		  {
 			if (game_title[i][j] == 1)
 				draw_line_x(RED, 1, 0);
+			else if (game_title[i][j] == 2)
+				draw_line_x(MENU_BG_COL, 1, 0);
 			else
-				right(1);
+				draw_line_x(BLACK, 1, 0);
 		  }
 
 		reset_right();
 		down(1);
-		center_x((34/2), 0);
+		center_x((35/2), 0);
 	  }
 
 	reset_right();
@@ -3183,14 +3260,14 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 
 	up((ws.ws_row/2)-(ws.ws_row/8));
 	right((ws.ws_col/2)-(strlen("Hall of Fame")/2));
-	printf("%s%sHall of Fame\e[m", BLACK, TORANGE);
+	printf("%s%sHall of Fame\e[m", MENU_BG_COL, TORANGE);
 	reset_right();
 	down(2);
 	right((ws.ws_col/2)-(70/2));
 
 	pthread_mutex_lock(&list_mutex);
 	if (!list_head)
-		printf("%s%s     No hall of famers! :(\e[m\n", BLACK, TSKY_BLUE);
+		printf("%s%s     No hall of famers! :(\e[m\n", MENU_BG_COL, TSKY_BLUE);
 
 	else
 	  {
@@ -3204,7 +3281,7 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 			  { log_err("show_hall_of_fame: strftime error"); goto fail; }
 
 			printf("%s%s#%d %s%s %*.*s%s Score: %s%6d%s | Food: %s%4d%s | Level: %s%d %s(%s%s%s)\e[m",
-				BLACK, TPINK, ptr->position,
+				MENU_BG_COL, TPINK, ptr->position,
 				TGREEN, ptr->name,
 				(ptr->position>9?(int)(20-strlen(ptr->name)):(int)(19-strlen(ptr->name))),
 				(ptr->position>9?(int)(20-strlen(ptr->name)):(int)(19-strlen(ptr->name))),
