@@ -330,7 +330,7 @@ main(int argc, char *argv[])
 	minu = 1;
 	minr = 1;
 
-	DEFAULT_USLEEP_TIME = get_default_sleep_time();
+	USLEEP_TIME = get_default_sleep_time();
 	clear_screen(BLACK);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
@@ -412,8 +412,9 @@ main(int argc, char *argv[])
 		  }
 	  }
 
-	default_r = ws.ws_col-10;
-	default_u = ws.ws_row-3;
+	/* start the snake in the upper-right quadrant */
+	default_r = (((rand()%(ws.ws_col/2))+(ws.ws_col/2))-1);
+	default_u = (((rand()%(ws.ws_row/2))+(ws.ws_row/2))-1);
 
 	/* allocate memory for screen matrix */
 	if (!(matrix = calloc(ws.ws_row, sizeof(int *))))
@@ -606,7 +607,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(2);
+	change_level(1);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
@@ -2009,7 +2010,7 @@ level_one(void)
 	write_stats();
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME = DEFAULT_USLEEP_TIME;
+	USLEEP_TIME = get_default_sleep_time();
 
 	return;
 }
@@ -2106,10 +2107,10 @@ level_two(void)
 
 	pthread_mutex_unlock(&mutex);
 
+	write_stats();
+
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
-
-	write_stats();
 
 	return;
 }
@@ -2174,10 +2175,10 @@ level_three(void)
 
 	pthread_mutex_unlock(&mutex);
 
+	write_stats();
+
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
-
-	write_stats();
 
 	return;
 }
@@ -2267,10 +2268,10 @@ level_four(void)
 
 	pthread_mutex_unlock(&mutex);
 
+	write_stats();
+
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
-
-	write_stats();
 
 	return;
 }
@@ -2426,96 +2427,158 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	int		slen;
 	int		i, j;
 	int		delta_d, delta_u, delta_r, delta_l;
+	int		bad_l, bad_r, bad_u, bad_d;
 	char		dir;
 
-	pthread_mutex_lock(&smutex);
 	pthread_mutex_lock(&mutex);
+	pthread_mutex_lock(&smutex);
 
+	/* The head square begins somewhere in the upper-right quadrant;
+	 * If it happens to be on a -1 square, find the best direction
+	 * to go in to find a 0 square
+	 */
 	head_r = default_r;
 	head_u = default_u;
 
-	if (h->sl < maxr)
+	reset_cursor();
+
+	if (matrix[head_u][head_r] == -1)
 	  {
-		debug("shifting head left");
-		while (h->r + h->sl >= maxr || matrix[h->u][h->r] == -1)
-		  { --(h->r); --(t->r); }
-	  }
-
-	/* try to position the head such that there's a gap of one
-	 * square between the head and any obstacles/boundaries in
-	 * all directions
-	 */
-
-	h->h->d = 0x6c;
-	dir = 0x72;
-
-	debug("finding best starting direction");
-	do
-	  {
-		delta_d &= ~delta_d;
-		delta_u &= ~delta_u;
-		delta_r &= ~delta_r;
-		delta_l &= ~delta_l;
+		bad_r &= ~bad_r;
+		bad_l &= ~bad_l;
+		bad_u &= ~bad_u;
+		bad_d &= ~bad_d;
 
 		save_u = head_u;
+
+		while (matrix[head_u][head_r] == -1)
+			++head_u;
+
+		bad_u = (head_u - save_u);
+
+		head_u = save_u;
+
+		while (matrix[head_u][head_r] == -1)
+			--head_u;
+
+		bad_d = (save_u - head_u);
+
+		head_u = save_u;
+
 		save_r = head_r;
 
-		while (matrix[head_u][head_r] != -1 && head_r > 0)
-		  { ++delta_l; --head_r; }
+		while (matrix[head_u][head_r] == -1)
+			++head_r;
+
+		bad_r = (head_r - save_r);
 
 		head_r = save_r;
 
-		while (matrix[head_u][head_r] != -1 && head_r < ws.ws_col-1)
-		  { ++delta_r; ++head_r; }
+		while (matrix[head_u][head_r] == -1)
+			--head_r;
+
+		bad_l = (save_r - head_r);
 
 		head_r = save_r;
 
-		while (matrix[head_u][head_r] != -1 && head_u > 0)
-		  { ++delta_d; --head_u; }
+		if (bad_l < bad_r && bad_l < bad_u && bad_l < bad_d)
+			head_r -= bad_l;
+		else if (bad_r < bad_l && bad_r < bad_u && bad_r < bad_d)
+			head_r += bad_r;
+		else if (bad_u < bad_l && bad_u < bad_r && bad_u < bad_d)
+			head_u += bad_u;
+		else
+			head_u -= bad_d;
+	  }
 
-		head_u = save_u;
-
-		while (matrix[head_u][head_r] != -1 && head_u < ws.ws_row)
-		  { ++delta_u; ++head_u; }
-
-		head_u = save_u;
-
-		/* if DIR is best direction, use it as the FORWARD direction to start the level! */
-		dir = best_direction(delta_u, delta_d, delta_l, delta_r);
-
-		h->h->d = dir;
-
-		switch(dir)
-		  {
-			case(0x75):
-			dir = 0x64;
-			break;
-			case(0x64):
-			dir = 0x75;
-			break;
-			case(0x72):
-			dir = 0x6c;
-			break;
-			case(0x6c):
-			dir = 0x72;
-			break;
-		  }
-	  } while (0);
-
-	debug("got backwards direction: %c", dir);
-
-	/* so now the head of snake should be in an acceptable
-	 * starting place. Now we need to nagivate the matrix
-	 * to find an acceptable path the snake can occupy
-	 * at the start of the level
+	/* Now that we've found a zero square on which to begin, find the
+	 * best FORWARD direction to go in, move the head along half of
+	 * the distance, and then proceed to draw the snake backwards in
+	 * the screen matrix
 	 */
+	delta_d &= ~delta_d;
+	delta_u &= ~delta_u;
+	delta_r &= ~delta_r;
+	delta_l &= ~delta_l;
+
+	save_u = head_u;
+	save_r = head_r;
+
+	while (matrix[head_u][head_r] != -1 && head_r > 0)
+	  { ++delta_l; --head_r; }
+
+	head_r = save_r;
+
+	while (matrix[head_u][head_r] != -1 && head_r < ws.ws_col-1)
+	  { ++delta_r; ++head_r; }
+
+	head_r = save_r;
+
+	while (matrix[head_u][head_r] != -1 && head_u > 0)
+	  { ++delta_d; --head_u; }
+
+	head_u = save_u;
+
+	while (matrix[head_u][head_r] != -1 && head_u < ws.ws_row)
+	  { ++delta_u; ++head_u; }
+
+	head_u = save_u;
+
+	dir = best_direction(delta_u, delta_d, delta_l, delta_r);
+
+	h->h->d = dir;
+
+	switch(dir)
+	  {
+		case(0x75):
+		head_u += (delta_u/3);
+		dir = 0x64;
+		break;
+		case(0x64):
+		head_u -= (delta_u/3);
+		dir = 0x75;
+		break;
+		case(0x72):
+		head_r += (delta_r/3);
+		dir = 0x6c;
+		break;
+		case(0x6c):
+		head_r -= (delta_l/3);
+		dir = 0x72;
+		break;
+	  }
+
+	/* Now we should have gotten the best FORWARD direction for the snake;
+	 * we just have to then find an acceptable path backwards in the screen
+	 * matrix representation
+	 */
+	reset_right();
+	reset_up();
 
 	h->u = head_u;
 	h->r = head_r;
-	h->np = 1;
 
-	/*dir = 0x72;
-	h->h->d = 0x6c;*/
+	switch(dir)
+	  {
+		case(0x72):
+		t->r = (h->r + (h->sl - 1));
+		t->u = h->u;
+		break;
+		case(0x6c):
+		t->r = (h->r - (h->sl - 1));
+		t->u = h->u;
+		break;
+		case(0x75):
+		t->u = (h->u + (h->sl - 1));
+		t->r = h->r;
+		break;
+		case(0x64):
+		t->u = (h->u - (h->sl - 1));
+		t->r = h->r;
+		break;
+	  }
+
+	h->np = 1;
 
 	matrix[head_u][head_r] = 1;
 	t->t->l = slen = 1;
@@ -2523,169 +2586,200 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	debug("finding acceptable path in screen matrix");
 	while (slen < h->sl)
 	  {
-		while (matrix[head_u+1][head_r] != -1 &&
-		  matrix[head_u-1][head_r] != -1 &&
-		  matrix[head_u][head_r+1] != -1 &&
-		  matrix[head_u][head_r-1] != -1 &&
-		  head_r < (ws.ws_col-2) &&
-		  head_r > 0 &&
-		  head_u < (ws.ws_row-1) &&
-		  head_u > 0)
-		  {
-			switch(dir)
-			  {
-				case(0x6c):
-				++slen; ++(t->t->l);
-				if (slen >= h->sl)
-					goto fini;
-				matrix[head_u][--head_r] = 1;
-				/*reset_right();
-				reset_up();
-				up(head_u);
-				right(head_r);
-				draw_line_x(PINK, 1, 0);*/
-				break;
-				case(0x72):
-				++slen; ++(t->t->l);
-				if (slen >= h->sl)
-					goto fini;
-				matrix[head_u][++head_r] = 1;
-				/*reset_right();
-				reset_up();
-				up(head_u);
-				right(head_r);
-				draw_line_x(PINK, 1, 0);*/
-				break;
-				case(0x64):
-				++slen; ++(t->t->l);
-				if (slen >= h->sl)
-					goto fini;
-				matrix[--head_u][head_r] = 1;
-				/*reset_right();
-				reset_up();
-				up(head_u);
-				right(head_r);
-				draw_line_x(PINK, 1, 0);*/
-				break;
-				case(0x75):
-				++slen; ++(t->t->l);
-				if (slen >= h->sl)
-					goto fini;
-				matrix[++head_u][head_r] = 1;
-				/*reset_right();
-				reset_up();
-				up(head_u);
-				right(head_r);
-				draw_line_x(PINK, 1, 0);*/
-				break;
-			  }
-			//usleep(500000);
-		  }
-
-		/* these need to be decremented here because if we got to a boundary 
-		 * then we moved back one block away from it before we got here
-		 */
-		--slen; --(t->t->l);
-
-		pthread_mutex_unlock(&smutex);
-		grow_tail(t);
-
-
-		pthread_mutex_lock(&smutex);
-		--(t->t->next->l);
-		t->t->l = 1;
-		++(h->np);
-
 		switch(dir)
 		  {
-			case(0x75):
-			matrix[head_u--][head_r] = 0;
-			i &= ~i;
-			j &= ~j;
-			save_r = head_r;
-
-			while (matrix[head_u][head_r] != -1 && head_r > 0)
-			  { ++i; --head_r; }
-
-			head_r = save_r;
-
-			while (matrix[head_u][head_r] != -1 && head_r < ws.ws_col-1)
-			  { ++j; ++head_r; }
-
-			head_r = save_r;
-
-			if (i < j)
-			  { dir = 0x6c; t->t->d = 0x72; }
-			else
-			  { dir = 0x72; t->t->d = 0x6c; }
-			break;
-			case(0x64):
-			matrix[head_u++][head_r] = 0;
-			i &= ~i;
-			j &= ~j;
-			save_r = head_r;
-
-			while (matrix[head_u][head_r] != -1 && head_r > 0)
-			  { ++i; --head_r; }
-
-			head_r = save_r;
-
-			while (matrix[head_u][head_r] != -1 && head_r < ws.ws_col-1)
-			  { ++j; ++head_r; }
-
-			head_r = save_r;
-
-			if (i > j)
-			  { dir = 0x6c; t->t->d = 0x72; }
-			else
-			  { dir = 0x72; t->t->d = 0x6c; }
-			break;
 			case(0x6c):
-			matrix[head_u][head_r++] = 0;
-			i &= ~i;
-			j &= ~j;
+			while (matrix[head_u][(head_r-1)] != -1 && head_r > 0)
+			  {
+				matrix[head_u][--head_r] = 1;
+				++slen; ++(t->t->l);
+				if (slen >= h->sl) goto fini;
+			  }
+
+			delta_u &= ~delta_u;
+			delta_d &= ~delta_d;
+
 			save_u = head_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u > 0)
-			  { ++i; --head_u; }
+			while (matrix[head_u][head_r] != -1 && head_u < maxu)
+				++head_u;
+
+			delta_u = (head_u - save_u);
 
 			head_u = save_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u < ws.ws_row)
-			  { ++j; ++head_u; }
+			while (matrix[head_u][head_r] != -1 && head_u > minu)
+				--head_u;
+
+			delta_d = (save_u - head_u);
 
 			head_u = save_u;
 
-			if (i > j)
+			//--slen; --(t->t->l);
+			pthread_mutex_unlock(&smutex);
+			grow_tail(t);
+			pthread_mutex_lock(&smutex);
+			--(t->t->next->l);
+			t->t->l = 1;
+			++(h->np);
+
+			if (delta_d > delta_u)
 			  { dir = 0x64; t->t->d = 0x75; }
 			else
 			  { dir = 0x75; t->t->d = 0x64; }
+
+			t->t->apex_u = head_u;
+			t->t->apex_r = head_r;
+			/*reset_right();
+			reset_up();
+			up(head_u);
+			right(head_r);
+			draw_line_x(PINK, 1, 0);*/
 			break;
 			case(0x72):
-			matrix[head_u][head_r--] = 0;
-			i &= ~i;
-			j &= ~j;
+			while (matrix[head_u][(head_r+1)] != -1 && head_r < maxr)
+			  {
+				matrix[head_u][++head_r] = 1;
+				++slen; ++(t->t->l);
+				if (slen >= h->sl) goto fini;
+			  }
+			delta_u &= ~delta_u;
+			delta_d &= ~delta_d;
+
 			save_u = head_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u > 0)
-			  { ++i; --head_u; }
+			while (matrix[head_u][head_r] != -1 && head_u < maxu)
+				++head_u;
+
+			delta_u = (head_u - save_u);
 
 			head_u = save_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u < ws.ws_row)
-			  { ++j; ++head_u; }
+			while (matrix[head_u][head_r] != -1 && head_u > minu)
+				--head_u;
+
+			delta_d = (save_u - head_u);
 
 			head_u = save_u;
 
-			if (i > j)
+
+			//--slen; --(t->t->l);
+			pthread_mutex_unlock(&smutex);
+			grow_tail(t);
+			pthread_mutex_lock(&smutex);
+			--(t->t->next->l);
+			t->t->l = 1;
+			++(h->np);
+
+			if (delta_d > delta_u)
 			  { dir = 0x64; t->t->d = 0x75; }
 			else
 			  { dir = 0x75; t->t->d = 0x64; }
+
+			t->t->apex_u = head_u;
+			t->t->apex_r = head_r;
+			/*reset_right();
+			reset_up();
+			up(head_u);
+			right(head_r);
+			draw_line_x(PINK, 1, 0);*/
+			break;
+			case(0x64):
+			while (matrix[(head_u-1)][head_r] != -1 && head_u > minu)
+			  {
+				matrix[--head_u][head_r] = 1;
+				++slen; ++(t->t->l);
+				if (slen >= h->sl) goto fini;
+			  }
+			delta_l &= ~delta_l;
+			delta_r &= ~delta_r;
+
+			save_r = head_r;
+
+			while (matrix[head_u][head_r] != -1 && head_r > minr)
+				--head_r;
+
+			delta_l = (save_r - head_r);
+
+			head_r = save_r;
+
+			while (matrix[head_u][head_r] != -1 && head_r < maxr)
+				++head_r;
+
+			delta_r = (head_r - save_r);
+
+			head_r = save_r;
+
+			//--slen; --(t->t->l);
+			pthread_mutex_unlock(&smutex);
+			grow_tail(t);
+			pthread_mutex_lock(&smutex);
+			--(t->t->next->l);
+			t->t->l = 1;
+			++(h->np);
+
+			if (delta_r > delta_l)
+			  { dir = 0x72; t->t->d = 0x6c; }
+			else
+			  { dir = 0x6c; t->t->d = 0x72; }
+
+			t->t->apex_u = head_u;
+			t->t->apex_r = head_r;
+			/*reset_right();
+			reset_up();
+			up(head_u);
+			right(head_r);
+			draw_line_x(PINK, 1, 0);*/
+			break;
+			case(0x75):
+			while (matrix[(head_u+1)][head_r] != -1 && head_u < maxu)
+			  {
+				matrix[++head_u][head_r] = 1;
+				++slen; ++(t->t->l);
+				if (slen >= h->sl) goto fini;
+			  }
+			delta_l &= ~delta_l;
+			delta_r &= ~delta_r;
+
+			save_r = head_r;
+
+			while (matrix[head_u][head_r] != -1 && head_r > minr)
+				--head_r;
+
+			delta_l = (save_r - head_r);
+
+			head_r = save_r;
+
+			while (matrix[head_u][head_r] != -1 && head_r > maxr)
+				++head_r;
+
+			delta_r = (head_r - save_r);
+
+			head_r = save_r;
+
+			//--slen; --(t->t->l);
+			pthread_mutex_unlock(&smutex);
+			grow_tail(t);
+			pthread_mutex_lock(&smutex);
+			--(t->t->next->l);
+			t->t->l = 1;
+			++(h->np);
+
+			if (delta_r > delta_l)
+			  { dir = 0x72; t->t->d = 0x6c; }
+			else
+			  { dir = 0x6c; t->t->d = 0x72; }
+
+			t->t->apex_u = head_u;
+			t->t->apex_r = head_r;
+			/*reset_right();
+			reset_up();
+			up(head_u);
+			right(head_r);
+			draw_line_x(PINK, 1, 0);*/
 			break;
 		  }
-
-		t->t->apex_u = head_u;
-		t->t->apex_r = head_r;
+		//usleep(500000);
 	  }
 
 	fini:
@@ -2696,7 +2790,7 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	 * tail block.
 	 */
 
-	--(t->t->l);
+	//--(t->t->l);
 
 	t->r = head_r;
 	t->u = head_u;
@@ -2723,31 +2817,14 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 		  }
 	  }
 
-	/*reset_right();
-	reset_up();
-	up(15);
-
-	Snake_Piece	*p = NULL;
-
-	i &= ~i;
-	for (p = t->t; p != NULL; p = p->next)
-	  {
-		printf("piece %02d: len %d; dir %c; apex_u: %d; apex_r: %d\n",
-			i++, p->l, p->d, p->apex_u, p->apex_r);
-	  }
-
 	reset_right();
-	reset_up();*/
+	reset_up();
 
 	up(h->u);
 	right(h->r);
 
-	draw_line_x(HD_COL, 1, 0);
-	left(1);
-
-	pthread_mutex_unlock(&mutex);
 	pthread_mutex_unlock(&smutex);
-
+	pthread_mutex_unlock(&mutex);
 	return;
 }
 
@@ -2797,7 +2874,9 @@ write_high_scores(Player *list_head, Player *list_end)
 {
 	Player		*ptr = NULL;
 	Player		player_storage;
+	int		num;
 
+	num &= ~num;
 	clearerr(hs_fp);
 	fseek(hs_fp, 0, SEEK_SET);
 
@@ -2816,6 +2895,10 @@ write_high_scores(Player *list_head, Player *list_end)
 				strerror(errno));
 			goto fail;
 		  }
+
+		++num;
+		if (num == 100)
+			break;
 	  }
 
 	return(0);
@@ -3202,9 +3285,12 @@ check_current_player_score(Player *current_player, Player *list_head, Player *li
 
 			if (current_player->score == lptr->score)
 			  {
-				while (lptr->score == current_player->score && lptr != NULL)
+				while (lptr->score == current_player->score && lptr->next != NULL)
 					lptr = lptr->next;
 			  }
+
+			if (current_player->score == lptr->score && lptr->next == NULL)
+			  { inserted = 1; break; }
 
 			while (lptr != NULL)
 			  {
