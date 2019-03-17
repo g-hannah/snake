@@ -60,7 +60,9 @@ char			*SN_COL = NULL;
 char			*BR_COL = NULL;
 char			*HD_COL = NULL;
 char			*FD_COL = NULL;
+int			DEFAULT_USLEEP_TIME;
 int			USLEEP_TIME;
+int			FOOD_REFRESH_TIME;
 int			maxr, minr, maxu, minu;
 int			EATEN;
 char			DIRECTION;
@@ -71,7 +73,6 @@ int			ate_food;
 int			gameover;
 int			thread_failed;
 int			LEVEL_THRESHOLD;
-int			DEFAULT_USLEEP_TIME;
 
 int			**matrix;
 
@@ -82,8 +83,9 @@ int NEW_BEST_PLAYER;
 void log_err(char *, ...) __nonnull ((1));
 void debug(char *, ...) __nonnull ((1));
 
+static int get_default_sleep_time(void) __wur;
 static inline void write_stats(void);
-static int write_hall_of_fame(Player *, Player *) __nonnull ((1,2)) __wur;
+static int write_high_scores(Player *, Player *) __nonnull ((1,2)) __wur;
 static int get_high_scores(Player **, Player **) __nonnull ((1,2)) __wur;
 static void free_high_scores(Player **, Player **) __nonnull ((1,2));
 static Player *new_player_node(void) __wur;
@@ -105,7 +107,7 @@ static int hit_own_body(Snake_Head *, Snake_Tail *) __nonnull ((1,2)) __wur;
 static int within_snake(Food *) __nonnull ((1)) __wur;
 
 static int setup_game(void);
-static void game_over(void);
+static int game_over(void);
 static void change_level(int);
 static void reset_snake(Snake_Head *, Snake_Tail *) __nonnull ((1,2));
 //static void redraw_snake(Snake_Head *, Snake_Tail *) __nonnull ((1,2));
@@ -147,9 +149,6 @@ __attribute__ ((constructor)) snake_init(void)
 	/* zero out data structures */
 	memset(&f, 0, sizeof(f));
 	memset(&ws, 0, sizeof(ws));
-
-	/* set the starting sleep time */
-	USLEEP_TIME = DEFAULT_USLEEP_TIME = 90000;
 
 	/* initialise thread-related variables */
 	debug("initialising thread mutexes");
@@ -248,6 +247,8 @@ __attribute__ ((constructor)) snake_init(void)
 
 	memset(tmp, 0, MAXLINE);
 
+	FOOD_REFRESH_TIME = 12;
+
 	return;
 
 	fail:
@@ -330,6 +331,7 @@ main(int argc, char *argv[])
 	minu = 1;
 	minr = 1;
 
+	DEFAULT_USLEEP_TIME = get_default_sleep_time();
 	clear_screen(BLACK);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
@@ -471,7 +473,7 @@ main(int argc, char *argv[])
 			reset_right();
 			reset_up();
 
-			l1 = strlen("Play Again");
+			l1 = strlen("Play");
 			l2 = strlen("Quit");
 
 			play_again = 1;
@@ -479,7 +481,7 @@ main(int argc, char *argv[])
 
 			up((ws.ws_row/2)-(ws.ws_row/16));
 			right((ws.ws_col/3) - l1/2);
-			printf("%s%sPlay Again\e[m", RED, TWHITE);
+			printf("%s%sPlay\e[m", RED, TWHITE);
 			reset_right();
 			right(((ws.ws_col/3)*2) - l2/2);
 			printf("%s%sQuit\e[m", BLACK, TWHITE);
@@ -530,7 +532,7 @@ main(int argc, char *argv[])
 				  {
 					up((ws.ws_row/2)-(ws.ws_row/16));
 					right((ws.ws_col/3)-l1/2);
-					printf("%s%sPlay Again\e[m", RED, TWHITE);
+					printf("%s%sPlay\e[m", RED, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", BLACK, TWHITE);
@@ -544,7 +546,7 @@ main(int argc, char *argv[])
 				  {
 					up((ws.ws_row/2)-(ws.ws_row/16));
 					right((ws.ws_col/3)-l1/2);
-					printf("%s%sPlay Again\e[m", BLACK, TWHITE);
+					printf("%s%sPlay\e[m", BLACK, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", RED, TWHITE);
@@ -1065,7 +1067,13 @@ snake_thread(void *arg)
 	lose:
 	//pthread_kill(tid_food, SIGINT);
 	//pthread_kill(tid_dir, SIGINT);
-	game_over();
+	if (game_over() == -1)
+	  {
+		log_err("snake_thread: game_over error");
+		pthread_kill(tid_main, SIGINT);
+		pthread_exit((void *)-1);
+	  }
+
 	gameover = 1;
 	pthread_exit((void *)0);
 }
@@ -1160,7 +1168,7 @@ put_some_food(void *arg)
 		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
-		sleep(12);
+		sleep(FOOD_REFRESH_TIME);
 	
 		if (!EATEN)
 		  {
@@ -1707,7 +1715,7 @@ within_snake(Food *f)
 }
 
 // GAME_OVER
-void
+int
 game_over(void)
 {
 	int		i, j;
@@ -1733,9 +1741,14 @@ game_over(void)
 	char_delay = 90000;
 
 	clear_screen(BLACK);
-	check_current_player_score(player, player_list->first, player_list->last);
-	write_hall_of_fame(player_list->first, player_list->last);
-	show_hall_of_fame(player_list->first, player_list->last);
+	if (check_current_player_score(player, player_list->first, player_list->last) < 0)
+	  { log_err("game_over: check_current_player error"); goto fail; }
+
+	if (write_high_scores(player_list->first, player_list->last) < 0)
+	  { log_err("game_over: write_high_scores error"); goto fail; }
+
+	if (show_hall_of_fame(player_list->first, player_list->last) < 0)
+	  { log_err("game_over: show_hall_of_fame error"); goto fail; }
 
 	pthread_mutex_lock(&mutex);
 	reset_cursor();
@@ -1898,13 +1911,18 @@ game_over(void)
 	NEW_BEST_PLAYER &= ~NEW_BEST_PLAYER;
 	BEAT_OWN_SCORE &= ~BEAT_OWN_SCORE;
 
-	return;
+	return(0);
+
+	fail:
+	return(-1);
 }
 
 // CHANGE_LEVEL
 void
 change_level(int next_level)
 {
+	player->highest_level = next_level;
+
 	switch(next_level)
 	  {
 		case(1):
@@ -1925,7 +1943,6 @@ change_level(int next_level)
 		default:
 		return;
 	  }
-
 
 	return;
 }
@@ -2871,9 +2888,9 @@ get_colour(char *col)
 		return(NULL);
 }*/
 
-// WRITE_HALL_OF_FAME
+// WRITE_HIGH_SCORES
 int
-write_hall_of_fame(Player *list_head, Player *list_end)
+write_high_scores(Player *list_head, Player *list_end)
 {
 	Player		*ptr = NULL;
 	Player		player_storage;
@@ -3353,4 +3370,25 @@ debug(char *fmt, ...)
 		fprintf(stderr, "\e[48;5;0m\e[38;5;9m-+[debug]+- %s\e[m\n", tmp);
 		if (tmp != NULL) { free(tmp); tmp = NULL; }
 	  }
+}
+
+// GET_DEFAULT_SLEEP_TIME
+int
+get_default_sleep_time(void)
+{
+	double	seconds = 0.0;
+	double	squares_per_second = 0.0;
+	int	useconds;
+
+	seconds = 0.09;
+	squares_per_second = (((double)1)/seconds);
+
+	while ((((double)ws.ws_col)/squares_per_second) > FOOD_REFRESH_TIME)
+	  {
+		seconds -= 0.01;
+		squares_per_second = (((double)1)/seconds);
+	  }
+
+	useconds = (int)(seconds * 1000000);
+	return(useconds);
 }
