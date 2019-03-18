@@ -138,7 +138,7 @@ __attribute__ ((constructor)) snake_init(void)
 	srand(time(NULL));
 
 	if ((tfd = open("/dev/tty", O_RDWR)) < 0)
-	  { fprintf(stderr, "snake_init > open (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("snake_init: failed to open /dev/tty"); goto fail; }
 
 	memset(&oterm, 0, sizeof(oterm));
 	memset(&nterm, 0, sizeof(nterm));
@@ -157,23 +157,23 @@ __attribute__ ((constructor)) snake_init(void)
 	/* initialise thread-related variables */
 	debug("initialising thread mutexes");
 	if ((ret = pthread_mutex_init(&mutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_mutex_init(&smutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_mutex_init(&sleep_mutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_mutex_init(&dir_mutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_mutex_init(&in_mutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_mutex_init(&list_mutex, NULL)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_mutex_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_mutex_init error (%s)\n", strerror(ret)); goto fail; }
 
 	debug("initialising thread attributes");
 	if ((ret = pthread_attr_init(&attr)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_attr_init (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_attr_init  error (%s)\n", strerror(ret)); goto fail; }
 	if ((ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED)) != 0)
-	  { fprintf(stderr, "snake_init > pthread_attr_setdetachstate (%s)\n", strerror(ret)); goto fail; }
+	  { fprintf(stderr, "snake_init: pthread_attr_setdetachstate error (%s)\n", strerror(ret)); goto fail; }
 
 	level = 1;
 	// _thresh
@@ -195,17 +195,17 @@ __attribute__ ((constructor)) snake_init(void)
 	debug("allocating memory for high_score_file");
 #ifndef WIN32
 	if (posix_memalign((void **)&high_score_file, 16, path_max) < 0)
-	  { fprintf(stderr, "snake_init > posix_memalign (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("snake_init: posix_memalign error for high_score_file"); goto fail; }
 #else
 	if (!(high_score_file = calloc(path_max, 1)))
-	  { fprintf(stderr, "snake_init > calloc (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("snake_init: calloc error for high_score_file"); goto fail; }
 #endif
 	debug("high_score_file = %p", high_score_file);
 
 	memset(high_score_file, 0, path_max);
 
 	if (!(user_home = getenv("HOME")))
-	  { fprintf(stderr, "snake_init: failed to get user's home directory (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("snake_init: failed to get user's home directory"); goto fail; }
 
 	debug("got user home: \"%s\"", user_home);
 
@@ -219,12 +219,12 @@ __attribute__ ((constructor)) snake_init(void)
 	if (access(high_score_file, F_OK) != 0)
 	  {
 		if ((hs_fd = open(high_score_file, O_RDWR|O_CREAT|O_TRUNC, S_IRWXU & ~S_IXUSR)) < 0)
-		  { fprintf(stderr, "snake_init: failed to create high score file (%s)\n", strerror(errno)); goto fail; }
+		  { log_err("snake_init: failed to create high scores file"); goto fail; }
 		debug("created \"%s\"", high_score_file);
 	  }
 
 	if (!(hs_fp = fopen(high_score_file, "r+")))
-	  { fprintf(stderr, "snake_init: failed to open high score file (%s)\n", strerror(errno)); goto fail; }
+	  { log_err("snake_init: fopen error"); goto fail; }
 
 	debug("opened \"%s\"", high_score_file);
 
@@ -288,24 +288,9 @@ __attribute__ ((destructor)) snake_fini(void)
 void
 main_thread_handle_sig(int signo)
 {
-	int		i;
-
 	if (signo == SIGINT)
 	  {
-		log_mutex("lock", "mutex");
-		pthread_mutex_lock(&mutex);
-		for (i = 0; i < 2; ++i)
-			printf("%c%c%c", 0x08, 0x20, 0x08);
-
-		reset_right();
-		reset_up();
-		right(ws.ws_col/4);
-		printf("%s%sSnake Caught SIGINT!\e[m", BLACK, TRED);
-		reset_right();
-		down(1);
 		thread_failed = 1;
-		log_mutex("unlock", "mutex");
-		pthread_mutex_unlock(&mutex);
 		return;
 	  }
 	else if (signo == SIGUSR1)
@@ -332,7 +317,9 @@ main(int argc, char *argv[])
 	 * moved back here to main())
 	 */
 
-	ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0)
+	  { log_err("main: ioctl TIOCGWINSZ error"); goto fail; }
+
 	maxu = ws.ws_row-2;
 	maxr = ws.ws_col-3;
 	minu = 1;
@@ -2000,9 +1987,9 @@ level_one(void)
 
 	BG_COL = TEAL;
 	BR_COL = BLACK;
-	SN_COL = RED;
+	SN_COL = WHITE;
 	HD_COL = DARK_RED;
-	FD_COL = SALMON;
+	FD_COL = RED;
 
 	for (i = 0; i < ws.ws_row; ++i)
 	  {
