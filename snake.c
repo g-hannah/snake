@@ -34,7 +34,6 @@ int			default_u;
 /* thread-related variables */
 pthread_t		tid_main;
 pthread_t		tid_snake;
-pthread_t		tid_time;
 pthread_t		tid_food;
 pthread_t		tid_dir;
 pthread_t		tid_score;
@@ -595,7 +594,6 @@ main(int argc, char *argv[])
 		  {
 			pthread_kill(tid_snake, SIGINT);
 			pthread_kill(tid_food, SIGINT);
-			pthread_kill(tid_time, SIGINT);
 			sigaction(SIGUSR1, &oact, NULL);
 			goto fail;
 		  }
@@ -649,8 +647,6 @@ setup_game(void)
 
 	if (pthread_create(&tid_food, &attr, put_some_food, NULL) != 0)
 		goto fail;
-	//if (pthread_create(&tid_time, &attr, update_sleep, NULL) != 0)
-		//goto fail;
 	if (pthread_create(&tid_dir, &attr, get_direction, NULL) != 0)
 		goto fail;
 	if (pthread_create(&tid_score, &attr, track_score, NULL) != 0)
