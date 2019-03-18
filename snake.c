@@ -12,13 +12,11 @@ FILE			*hs_fp = NULL;
 int			hs_fd = -1;
 char			*user_home = NULL;
 char			*high_score_file = NULL;
-char			*data_dir = NULL;
 int			path_max;
 char			*tmp = NULL;
 
 Player_List		*player_list;
 Player			*player;
-Player			*_new;
 
 char			save_name[32];
 
@@ -94,6 +92,9 @@ static void free_high_scores(Player **, Player **) __nonnull ((1,2));
 static Player *new_player_node(void) __wur;
 static int show_hall_of_fame(Player *, Player *) __nonnull ((1,2)) __wur;
 static int check_current_player_score(Player *, Player *, Player *) __nonnull ((1,2,3)) __wur;
+
+static void save_screen_format(Snake_Head *, Snake_Tail *) __nonnull ((1,2));
+static void restore_screen_format(void);
 
 static int title_screen(void);
 
@@ -2457,19 +2458,51 @@ redraw_snake(Snake_Head *h, Snake_Tail *t)
 	return;
 }
 
+// _PAUSE
 void
 _pause(void)
 {
+	char		*paused_text = "Game Paused";
+
 	pthread_mutex_lock(&mutex);
 	pthread_mutex_lock(&smutex);
 	pthread_mutex_lock(&dir_mutex);
 	pthread_mutex_lock(&sleep_mutex);
+
+	save_screen_format(&shead, &stail);
+
+	reset_right();
+	reset_up();
+
+	up(ws.ws_row/2);
+	right((ws.ws_col/2)-(strlen(paused_text)/2));
+	printf("%s%s%s\e[m", BG_COL, TSKY_BLUE, paused_text);
+
+	reset_right();
+	reset_up();
+
+	return;
 }
 
+// UNPAUSE
 void
 unpause(void)
 {
+	int		i, j;
+
+	restore_screen_format();
+
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col; ++j)
+		  {
+			if (matrix[i][j] == 1)
+				matrix[i][j] = 0;
+		  }
+	  }
+
 	pthread_mutex_unlock(&mutex);
+	write_stats();
 	pthread_mutex_unlock(&smutex);
 	pthread_mutex_unlock(&dir_mutex);
 	pthread_mutex_unlock(&sleep_mutex);
@@ -3458,4 +3491,101 @@ get_default_sleep_time(void)
 
 	useconds = (int)(seconds * 1000000);
 	return(useconds);
+}
+
+// SAVE_SCREEN_FORMAT
+void
+save_screen_format(Snake_Head *h, Snake_Tail *t)
+{
+	Snake_Piece		*p = NULL;
+	int			l;
+	int			r, u;
+
+	r = t->r;
+	u = t->u;
+
+	for (p = t->t; p != NULL; p = p->next)
+	  {
+		switch(p->d)
+		  {
+			case(0x75):
+			if (p != t->t)
+				++u;
+			l &= ~l;
+			while (l < p->l)
+			  {
+				matrix[u][r] = 1;
+				++l;
+				if (l < p->l) ++u;
+			  }
+			break;
+			case(0x64):
+			if (p != t->t)
+				--u;
+			l &= ~l;
+			while (l < p->l)
+			  {
+				matrix[u][r] = 1;
+				++l;
+				if (l < p->l) --u;
+			  }
+			break;
+			case(0x6c):
+			if (p != t->t)
+				--r;
+			l &= ~l;
+			while (l < p->l)
+			  {
+				matrix[u][r] = 1;
+				++l;
+				if (l < p->l) --r;
+			  }
+			break;
+			case(0x72):
+			if (p != t->t)
+				++r;
+			l &= ~l;
+			while (l < p->l)
+			  {
+				matrix[u][r] = 1;
+				++l;
+				if (l < p->l) ++r;
+			  }
+			break;
+		  }	
+	  }
+
+	matrix[f.u][f.r] = 2;
+
+	return;
+}
+
+// RESTORE_SCREEN_FORMAT
+void
+restore_screen_format(void)
+{
+	int		i, j;
+
+	reset_right();
+	reset_up();
+
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col; ++j)
+		  {
+			if (matrix[i][j] == -1)
+				draw_line_x(BR_COL, 1, 0);
+			else if (matrix[i][j] == 1)
+				draw_line_x(SN_COL, 1, 0);
+			else if (matrix[i][j] == 2)
+				draw_line_x(FD_COL, 1, 0);
+			else
+				draw_line_x(BG_COL, 1, 0);
+		  }
+
+		reset_right();
+		up(1);
+	  }
+
+	return;
 }
