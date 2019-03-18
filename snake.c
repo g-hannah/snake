@@ -1119,7 +1119,9 @@ track_score(void *arg)
 		  {
 			ate_food &= ~ate_food;
 			(player->score += (level * 10));
+			pthread_mutex_lock(&mutex);
 			write_stats();
+			pthread_mutex_unlock(&mutex);
 		  }
 	  }
 
@@ -1599,7 +1601,6 @@ get_direction(void *arg)
 					read(STDIN_FILENO, &c[0], 1);
 				  }
 				unpause();
-				write_stats();
 				for (i = 0; i < 4; ++i)
 					c[i] = 0;
 				continue;
@@ -2031,9 +2032,8 @@ level_one(void)
 	draw_line_x(BR_COL, ws.ws_col-1, 1);
 	draw_line_y(BR_COL, ws.ws_row, 0);*/
 
-	pthread_mutex_unlock(&mutex);
-
 	write_stats();
+	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME = get_default_sleep_time();
@@ -2132,9 +2132,8 @@ level_two(void)
 		up(1);
 	  }
 
-	pthread_mutex_unlock(&mutex);
-
 	write_stats();
+	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
@@ -2200,9 +2199,9 @@ level_three(void)
 		up(1);
 	  }
 
-	pthread_mutex_unlock(&mutex);
 
 	write_stats();
+	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
@@ -2286,9 +2285,8 @@ level_four(void)
 
 	reset_cursor();
 
-	pthread_mutex_unlock(&mutex);
-
 	write_stats();
+	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 20000;
@@ -2348,9 +2346,9 @@ level_five(void)
 		up(1);
 	  }
 
-	pthread_mutex_unlock(&mutex);
 
 	write_stats();
+	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME -= 10000;
@@ -2531,6 +2529,8 @@ unpause(void)
 	right(f.r);
 	draw_line_x(FD_COL, 1, 0);
 	reset_cursor();
+
+	write_stats();
 
 	pthread_mutex_unlock(&mutex);
 	pthread_mutex_unlock(&smutex);
@@ -3051,8 +3051,6 @@ write_stats(void)
 {
 	memset(tmp, 0, MAXLINE);
 
-	pthread_mutex_lock(&mutex);
-
 	reset_right();
 	reset_up();
 	up(ws.ws_row-1);
@@ -3131,8 +3129,6 @@ write_stats(void)
 
 	up(shead.u);
 	right(shead.r);
-
-	pthread_mutex_unlock(&mutex);
 
 	return;
 }
