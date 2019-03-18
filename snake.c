@@ -253,7 +253,7 @@ __attribute__ ((constructor)) snake_init(void)
 
 	FOOD_REFRESH_TIME = 12;
 
-	MENU_BG_COL = BLACK;
+	MENU_BG_COL = LIGHT_GREY;
 	TEXT_SHADOW_COL = DARK_RED;
 
 	return;
@@ -379,6 +379,18 @@ main(int argc, char *argv[])
 
 		if (c == 0x0a)
 		  {
+			if (i == 0)
+			  {
+				up((ws.ws_row/2)-1);
+				clear_line(MENU_BG_COL);
+				right((ws.ws_col/2)-(strlen("No username entered!")/2));
+				printf("%s%sNo username entered!\e[m", MENU_BG_COL, TBLACK);
+				reset_right();
+				reset_up();
+				c &= ~c;
+				continue;
+			  }
+
 			break;
 		  }
 		else if (c == 0x7f)
@@ -401,16 +413,15 @@ main(int argc, char *argv[])
 				continue;
 			player->name[i++] = c;
 			up((ws.ws_row/2)-1);
+			clear_line(MENU_BG_COL);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
 			printf("%s%s%s\e[m", MENU_BG_COL, TPINK, player->name);
 			reset_right();
 			reset_up();
 		  }
 	  }
-	player->name[i] = 0;
 
-	if (player->name[strlen(player->name)-1] == 0x0a)
-		player->name[strlen(player->name)-1] = 0;
+	player->name[i] = 0;
 
 	player->score = 0;
 	player->num_eaten = 0;
@@ -3343,13 +3354,13 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 				MENU_BG_COL, TPINK,
 				(ptr->position<10?" ":""),
 				ptr->position,
-				TGREEN, ptr->name,
+				TTEAL, ptr->name,
 				(int)(20-strlen(ptr->name)),
 				(int)(20-strlen(ptr->name)),
 				arrows, TWHITE,
-				TSKY_BLUE, ptr->score, TWHITE,
-				TSKY_BLUE, ptr->num_eaten, TWHITE,
-				TSKY_BLUE, ptr->highest_level,
+				TBLUE, ptr->score, TWHITE,
+				TBLUE, ptr->num_eaten, TWHITE,
+				TBLUE, ptr->highest_level,
 				TWHITE, TRED, time_string, TWHITE);
 
 			reset_right();
