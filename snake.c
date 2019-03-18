@@ -62,6 +62,7 @@ char			*BR_COL = NULL;
 char			*HD_COL = NULL;
 char			*FD_COL = NULL;
 char			*MENU_BG_COL = NULL;
+char			*TEXT_SHADOW_COL = NULL;
 int			DEFAULT_USLEEP_TIME;
 int			USLEEP_TIME;
 int			FOOD_REFRESH_TIME;
@@ -251,7 +252,8 @@ __attribute__ ((constructor)) snake_init(void)
 
 	FOOD_REFRESH_TIME = 12;
 
-	MENU_BG_COL = DARK_GREY;
+	MENU_BG_COL = BLACK;
+	TEXT_SHADOW_COL = DARK_RED;
 
 	return;
 
@@ -352,7 +354,7 @@ main(int argc, char *argv[])
 	col_max = (ws.ws_col-1);
 
 	USLEEP_TIME = get_default_sleep_time();
-	clear_screen(DARK_GREY);
+	clear_screen(MENU_BG_COL);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
 	  { log_err("main: get_high_scores error"); goto fail; }
@@ -362,8 +364,9 @@ main(int argc, char *argv[])
 	right((ws.ws_col/2)-(strlen("Enter Name")/2));
 	printf("%s%sEnter name\e[m", MENU_BG_COL, TRED);
 	reset_right();
-	down(1);
-	right(ws.ws_col/2);
+	reset_up();
+	//down(1);
+	//right(ws.ws_col/2);
 	memset(player->name, 0, 32);
 
 	c = 255;
@@ -384,18 +387,23 @@ main(int argc, char *argv[])
 
 			--i;
 			player->name[i] = 0;
-			clear_line(BLACK);
+			up((ws.ws_row/2)-1);
+			clear_line(MENU_BG_COL);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", MENU_BG_COL, TPURPLE, player->name);
+			printf("%s%s%s\e[m", MENU_BG_COL, TPINK, player->name);
+			reset_right();
+			reset_up();
 		  }
 		else
 		  {
 			if (i == 18)
 				continue;
 			player->name[i++] = c;
-			reset_right();
+			up((ws.ws_row/2)-1);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", MENU_BG_COL, TPURPLE, player->name);
+			printf("%s%s%s\e[m", MENU_BG_COL, TPINK, player->name);
+			reset_right();
+			reset_up();
 		  }
 	  }
 	player->name[i] = 0;
@@ -630,7 +638,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(5);
+	change_level(1);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
@@ -1747,16 +1755,16 @@ game_over(void)
 	char		*beat_own_score_string = "You beat your previous score!";
 	char		*digits = "0123456789";
 	int		char_delay;
-	int		game_over_text[8][58] =
+	int		game_over_text[8][64] =
 	  {
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-		{ 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0 },
-		{ 1, 1, 0, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-		{ 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 2, 2, 2 },
-		{ 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2 },
-		{ 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 2, 1, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0 }
+		{ 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0 },
+		{ 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+		{ 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 0, 2, 2, 2 },
+		{ 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 0, 2, 1, 1, 0, 2, 2, 1, 1, 1, 1, 0, 2, 2, 1, 1, 0, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2 },
+		{ 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 2, 1, 1, 1, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2 },
+		{ 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0 }
 	  };
 
 	char_delay = 90000;
@@ -1775,23 +1783,23 @@ game_over(void)
 	reset_cursor();
 
 	up((ws.ws_row/2)+(ws.ws_row/4)+(ws.ws_row/8));
-	center_x((58/2), 0);
+	center_x((65/2), 0);
 
 	for (i = 0; i < 8; ++i)
 	  {
-		for (j = 0; j < 58; ++j)
+		for (j = 0; j < 64; ++j)
 		  {
 			if (game_over_text[i][j] == 1)
 				draw_line_x(RED, 1, 0);
 			else if (game_over_text[i][j] == 2)
 				draw_line_x(MENU_BG_COL, 1, 0);
 			else
-				draw_line_x(BLACK, 1, 0);
+				draw_line_x(TEXT_SHADOW_COL, 1, 0);
 		  }
 
 		reset_right();
 		down(1);
-		center_x((58/2), 0);
+		center_x((65/2), 0);
 	  }
 
 	reset_right();
@@ -1976,31 +1984,22 @@ level_one(void)
 {
 	int		i, j;
 
-	BG_COL = LIGHT_GREY;
+	BG_COL = TEAL;
 	BR_COL = BLACK;
 	SN_COL = RED;
 	HD_COL = DARK_RED;
-	FD_COL = DARK_GREEN;
+	FD_COL = SALMON;
 
 	for (i = 0; i < ws.ws_row; ++i)
+	  {
 		for (j = 0; j < ws.ws_col; ++j)
-			matrix[i][j] = 0;
-
-	i = 0;
-	for (j = 0; j < ws.ws_col; ++j)
-		matrix[i][j] = -1;
-
-	j = ws.ws_col-1;
-	for (i = 0; i < ws.ws_row; ++i)
-		matrix[i][j] = -1;
-
-	j = 0;
-	for (i = 0; i < ws.ws_row; ++i)
-		matrix[i][j] = -1;
-
-	i = ws.ws_row-1;
-	for (j = 0; j < ws.ws_col; ++j)
-		matrix[i][j] = -1;
+		  {
+			if (i == 0 || i == ws.ws_row-1 || j == 0 || j == ws.ws_col-1 || j == ws.ws_col-2)
+				matrix[i][j] = -1;
+			else
+				matrix[i][j] = 0;
+		  }
+	  }
 
 	pthread_mutex_lock(&mutex);
 
@@ -3079,16 +3078,16 @@ int
 title_screen(void)
 {
 	int	i, j;
-	int	game_title[8][35] = 
+	int	game_title[8][39] = 
 	  {
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-	    { 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
-	    { 2, 2, 2, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 2, 2, 2, 2 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 },
-	    { 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0 }
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 0, 2, 2, 2, 2, 1, 1, 1, 0, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 0, 2, 2, 1, 1, 0, 2, 2, 2, 2 },
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 2, 2, 2, 1, 1, 1, 0, 2, 1, 1, 0, 1, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 1, 0, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 1, 1, 0, 2, 2, 1, 1, 0, 2, 2, 2, 2 },
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 },
+	    { 1, 1, 1, 1, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 0, 2, 1, 1, 1, 1, 1, 1, 0 }
 	  };
 
 	if (show_hall_of_fame(player_list->first, player_list->last) == -1)
@@ -3100,22 +3099,22 @@ title_screen(void)
 	reset_up();
 
 	up((ws.ws_row/2)+(ws.ws_row/4)+(ws.ws_row/8));
-	center_x((35/2), 0);
+	center_x((39/2), 0);
 	for (i = 0; i < 8; ++i)
 	  {
-		for (j = 0; j < 35; ++j)
+		for (j = 0; j < 39; ++j)
 		  {
 			if (game_title[i][j] == 1)
 				draw_line_x(RED, 1, 0);
 			else if (game_title[i][j] == 2)
 				draw_line_x(MENU_BG_COL, 1, 0);
 			else
-				draw_line_x(BLACK, 1, 0);
+				draw_line_x(TEXT_SHADOW_COL, 1, 0);
 		  }
 
 		reset_right();
 		down(1);
-		center_x((35/2), 0);
+		center_x((39/2), 0);
 	  }
 
 	reset_right();
@@ -3263,7 +3262,7 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 	printf("%s%sHall of Fame\e[m", MENU_BG_COL, TORANGE);
 	reset_right();
 	down(2);
-	right((ws.ws_col/2)-(70/2));
+	right((ws.ws_col/2)-(76/2));
 
 	pthread_mutex_lock(&list_mutex);
 	if (!list_head)
@@ -3280,11 +3279,13 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 			if (strftime(time_string, 32, "%02d/%m/%Y", &TIME) < 0)
 			  { log_err("show_hall_of_fame: strftime error"); goto fail; }
 
-			printf("%s%s#%d %s%s %*.*s%s Score: %s%6d%s | Food: %s%4d%s | Level: %s%d %s(%s%s%s)\e[m",
-				MENU_BG_COL, TPINK, ptr->position,
+			printf("%s%s%s#%d %s%s %*.*s%s Score: %s%6d%s | Food: %s%4d%s | Level: %s%d %s(%s%s%s)\e[m",
+				MENU_BG_COL, TPINK,
+				(ptr->position<10?" ":""),
+				ptr->position,
 				TGREEN, ptr->name,
-				(ptr->position>9?(int)(20-strlen(ptr->name)):(int)(19-strlen(ptr->name))),
-				(ptr->position>9?(int)(20-strlen(ptr->name)):(int)(19-strlen(ptr->name))),
+				(int)(20-strlen(ptr->name)),
+				(int)(20-strlen(ptr->name)),
 				arrows, TWHITE,
 				TSKY_BLUE, ptr->score, TWHITE,
 				TSKY_BLUE, ptr->num_eaten, TWHITE,
@@ -3293,7 +3294,7 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 
 			reset_right();
 			down(1);
-			right((ws.ws_col/2)-(70/2));
+			right((ws.ws_col/2)-(76/2));
 			++cnt;
 			if (cnt == 10) // only show 10 hall of famers!
 				break;
