@@ -1599,6 +1599,7 @@ get_direction(void *arg)
 					read(STDIN_FILENO, &c[0], 1);
 				  }
 				unpause();
+				write_stats();
 				for (i = 0; i < 4; ++i)
 					c[i] = 0;
 				continue;
@@ -2463,6 +2464,8 @@ void
 _pause(void)
 {
 	char		*paused_text = "Game Paused";
+	int		u, r;
+	int		i;
 
 	pthread_mutex_lock(&mutex);
 	pthread_mutex_lock(&smutex);
@@ -2474,9 +2477,24 @@ _pause(void)
 	reset_right();
 	reset_up();
 
-	up(ws.ws_row/2);
-	right((ws.ws_col/2)-(strlen(paused_text)/2));
-	printf("%s%s%s\e[m", BG_COL, TSKY_BLUE, paused_text);
+	u = (ws.ws_row/2);
+	r = ((ws.ws_col/2)-(strlen(paused_text)/2));
+	up(u);
+	right(r);
+
+	for (i = 0; i < strlen(paused_text); ++i)
+	  {
+		if (matrix[u][r] == -1)
+			printf("%s%s%c\e[m", BR_COL, TSKY_BLUE, paused_text[i]);
+		else if (matrix[u][r] == 1)
+			printf("%s%s%c\e[m", SN_COL, TSKY_BLUE, paused_text[i]);
+		else if (matrix[u][r] == 2)
+			printf("%s%s%c\e[m", FD_COL, TSKY_BLUE, paused_text[i]);
+		else
+			printf("%s%s%c\e[m", BG_COL, TSKY_BLUE, paused_text[i]);
+
+		++r;
+	  }
 
 	reset_right();
 	reset_up();
@@ -2490,6 +2508,13 @@ unpause(void)
 {
 	int		i, j;
 
+	for (i = 0; i < ws.ws_row; ++i)
+	  {
+		for (j = 0; j < ws.ws_col; ++j)
+			if (matrix[i][j] == 2)
+				matrix[i][j] = 0;
+	  }
+
 	restore_screen_format();
 
 	for (i = 0; i < ws.ws_row; ++i)
@@ -2501,11 +2526,17 @@ unpause(void)
 		  }
 	  }
 
+	reset_cursor();
+	up(f.u);
+	right(f.r);
+	draw_line_x(FD_COL, 1, 0);
+	reset_cursor();
+
 	pthread_mutex_unlock(&mutex);
-	write_stats();
 	pthread_mutex_unlock(&smutex);
 	pthread_mutex_unlock(&dir_mutex);
 	pthread_mutex_unlock(&sleep_mutex);
+
 }
 
 static char
