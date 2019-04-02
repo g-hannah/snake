@@ -64,14 +64,14 @@ int			DEFAULT_USLEEP_TIME;
 int			USLEEP_TIME;
 int			FOOD_REFRESH_TIME;
 int			maxr, minr, maxu, minu;
-int			EATEN;
 char			DIRECTION;
-int			level;
-int			featen;
-int			score;
-int			ate_food;
-int			gameover;
-int			thread_failed;
+volatile int		EATEN;
+volatile int		level;
+volatile int		featen;
+volatile int		score;
+volatile int		ate_food;
+volatile int		gameover;
+volatile int		thread_failed;
 int			LEVEL_THRESHOLD;
 
 int			**matrix;
@@ -123,6 +123,7 @@ static void level_three(void);
 static void level_four(void);
 static void level_five(void);
 
+void strip_crnl(char *) __nonnull ((1));
 //static char *get_colour(char *) __nonnull ((1)) __wur;
 
 static void
@@ -518,9 +519,15 @@ main(int argc, char *argv[])
 			for (i = 0; i < 4; ++i)
 				choice[i] &= ~(choice[i]);
 
+			int	ret;
+
 			for (;;)
 			  {
-				read(STDIN_FILENO, choice, 3);
+				if ((ret = read(STDIN_FILENO, choice, 3)) <= 0)
+				  {
+					if (errno == EINTR) continue;
+					else { log_err("main: read error"); goto fail; }
+				  }
 				if (choice[0] == 0x0a)
 				  {
 					log_mutex("unlock", "mutex");
@@ -1562,6 +1569,7 @@ get_direction(void *arg)
 	char			c[4];
 	int			fd;
 	int			i;
+	int			ret;
 	struct termios		term, old;
 
 	signal(SIGQUIT, get_direction_sig_handler);
@@ -1585,14 +1593,22 @@ get_direction(void *arg)
 		       strncmp("\e[C", c, 3) != 0 &&
 		       strncmp("\e[D", c, 3) != 0)
 		  {
-			read(STDIN_FILENO, &c[0], 1);
+			if ((ret = read(STDIN_FILENO, &c[0], 1)) != 1)
+			  {
+				if (errno == EINTR) continue;
+				else { log_err("get_direction: read error"); goto fail; }
+			  }
 			if (c[0] == 0x20)
 			  {
 				_pause();
 				c[0] &= ~(c[0]);
 				while (c[0] != 0x20)
 				  {
-					read(STDIN_FILENO, &c[0], 1);
+					if ((ret = read(STDIN_FILENO, &c[0], 1)) != 1)
+					  {
+						if (errno == EINTR) continue;
+						else { log_err("get_direction: read error"); goto fail; }
+					  }
 				  }
 				unpause();
 				for (i = 0; i < 4; ++i)
@@ -1600,7 +1616,11 @@ get_direction(void *arg)
 				continue;
 			  }
 		
-			read(STDIN_FILENO, &c[1], 2);
+			if ((ret = read(STDIN_FILENO, &c[1], 2)) != 2)
+			  {
+				if (errno == EINTR) continue;
+				else { log_err("get_direction: read error"); goto fail; }
+			  }
 			c[3] = 0;
 		  }
 
@@ -1630,6 +1650,10 @@ get_direction(void *arg)
 	  }
 
 	pthread_exit((void *)0);
+
+	fail:
+	pthread_kill(tid_main, SIGINT);
+	pthread_exit((void *)-1);
 }
 
 int
@@ -3191,6 +3215,7 @@ get_high_scores(Player **list_head, Player **list_end)
 	Player		player_storage;
 	struct stat	statb;
 	size_t		bytes_so_far;
+	int		ret;
 
 	memset(&statb, 0, sizeof(statb));
 	if (lstat(high_score_file, &statb) < 0)
@@ -3207,7 +3232,7 @@ get_high_scores(Player **list_head, Player **list_end)
 
 	while (!feof(hs_fp))
 	  {
-		if (fread(&player_storage, sizeof(player_storage), 1, hs_fp) < 0)
+		if ((ret = fread(&player_storage, sizeof(player_storage), 1, hs_fp)) < 0)
 		  { log_err("get_high_scores: fread error"); goto fail; }
 
 		if (!(node = new_player_node()))
@@ -3607,6 +3632,26 @@ restore_screen_format(void)
 		reset_right();
 		up(1);
 	  }
+
+	return;
+}
+
+void
+strip_crnl(char *line)
+{
+	char		*p = NULL;
+	size_t		l;
+
+	l = strlen(line);
+
+	p = (line + (l - 1));
+	if (*p != 0x0d && *p != 0x0a) return;
+
+	while ((*p == 0x0d || *p == 0x0a) && p > (line + 1)) --p;
+
+	++p;
+
+	*p = 0;
 
 	return;
 }

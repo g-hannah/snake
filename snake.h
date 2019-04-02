@@ -5,7 +5,6 @@
 # include <errno.h>
 #endif
 #include <fcntl.h>
-#include <misclib.h>
 #include <pthread.h>
 #include <termios.h>
 #include <stdarg.h>
@@ -21,9 +20,6 @@
 #ifndef _TIME_H
 # include <time.h>
 #endif
-
-#define max(a, b) return((a)>=(b)?(a):(b));
-#define min(a, b) return((a)<=(b)?(a):(b));
 
 #define MAXLINE		1024
 
@@ -57,10 +53,10 @@ struct Food
 {
 	int	r;
 	int	u;
-	int	maxr;
-	int	minr;
 	int	maxu;
 	int	minu;
+	int	maxr;
+	int	minr;
 };
 
 struct Player

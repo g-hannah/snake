@@ -2,12 +2,12 @@ CC=gcc
 WFLAGS=-Wall -Werror
 CFILES=snake.c
 OFILES=snake.o
-LIBS=-lscreenlib -lmisclib -lpthread
+LIBS=-lscreenlib -lpthread
 
 snake: snake.o
-	$(CC) -g -o snake $(WFLAGS) $(OFILES) $(LIBS)
+	$(CC) -O2 -o snake $(WFLAGS) $(OFILES) $(LIBS)
 snake.o: snake.c
-	$(CC) -g -c $(WFLAGS) $(CFILES) $(LIBS)
+	$(CC) -O2 -c $(WFLAGS) $(CFILES)
 
 clean:
 	rm *.o
