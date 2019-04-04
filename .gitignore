@@ -1,6 +1,6 @@
 *.o
 test*
 snake
-tmp*
+*tmp*
 .*
 !.gitignore
