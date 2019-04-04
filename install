@@ -1,0 +1,36 @@
+#!/bin/bash
+
+#####################################################
+## OS X always complains about __nonnull and __wur ##
+#####################################################
+if [ "${OSTYPE}" == "darwin" ]; then
+	sed -i '' 's/ __nonnull.*;/;/' ./snake.c
+	sed -i '' 's/ __wur.*;/;/' ./snake.c
+fi
+
+#####################################################
+## Compile and install the custom shared object	   ##
+#####################################################
+gcc -c -Wall -Werror -fPIC -o "./libs/screenlib.o" "./libs/screenlib.c"
+gcc -shared -o "./libs/libscreenlib.so" "./libs/screenlib.o"
+sudo cp "./libs/screenlib.h" "/usr/include"
+sudo chmod 644 "/usr/include"
+sudo cp "./libs/libscreenlib.so" "/usr/lib"
+sudo chmod 755 "/usr/lib/libscreenlib.so"
+
+gcc -c -O2 -Wall -Werror "./snake.c"
+if [ $? -ne 0 ]; then
+	echo "[-] Failed to create object file from snake.c"
+	exit 1
+fi
+
+gcc -O2 -Wall -Werror -o "./snake" "./snake.o" -lscreenlib
+if [ $? -ne 0 ]; then
+	echo "[-] Failed to compile binary from object file"
+	exit 1
+fi
+
+sudo cp "./snake" "${PATH%%:*}"
+sudo chmod 755 "${PATH%%:*}/snake"
+
+echo "[+] Successfully compiled and installed snake"
