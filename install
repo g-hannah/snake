@@ -12,11 +12,25 @@ fi
 ## Compile and install the custom shared object	   ##
 #####################################################
 gcc -c -Wall -Werror -fPIC -o "./libs/screenlib.o" "./libs/screenlib.c"
+if [ $? -ne 0 ]; then
+	echo "[-] Failed to compile object file from ./libs/screenlib.c"
+	exit 1
+fi
+
 gcc -shared -o "./libs/libscreenlib.so" "./libs/screenlib.o"
+if [ $? -ne 0 ]; then
+	echo "[-] Failed to compiled shared object from ./libs/screenlib.o"
+	exit 1
+fi
+
+echo "[+] Compiled shared object"
+
 sudo cp "./libs/screenlib.h" "/usr/include"
 sudo chmod 644 "/usr/include"
 sudo cp "./libs/libscreenlib.so" "/usr/lib"
 sudo chmod 755 "/usr/lib/libscreenlib.so"
+
+echo "[+] Compiling snake binary"
 
 gcc -c -O2 -Wall -Werror "./snake.c"
 if [ $? -ne 0 ]; then
