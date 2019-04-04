@@ -290,6 +290,8 @@ main_thread_handle_sig(int signo)
 {
 	if (signo == SIGINT)
 	  {
+		if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+		if (write_high_scores(player_list->first, player_list->last) < 0);
 		thread_failed = 1;
 		return;
 	  }
@@ -357,7 +359,7 @@ main(int argc, char *argv[])
 	//right(ws.ws_col/2);
 	memset(player->name, 0, 32);
 
-	c = 255;
+	c = 0;
 	i &= ~i;
 
 	while (c != 0x0a)
@@ -642,7 +644,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(1);
+	change_level(2);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
@@ -2065,11 +2067,9 @@ level_two(void)
 {
 	int		i, j;
 	int		row_4;
-	int		col_4;
-	int		row_8;
-	int		col_8;
-	int		row_16;
-	//int		col_16;
+	int		row_34;
+	int		col_3;
+	int		col_23;
 
 	BR_COL = BLACK;
 	BG_COL = SALMON;
@@ -2078,60 +2078,33 @@ level_two(void)
 	FD_COL = PURPLE;
 
 	row_4 = (ws.ws_row/4);
-	row_8 = (ws.ws_row/8);
-	row_16 = (ws.ws_row/16);
-
-	col_4 = (ws.ws_col/4);
-	col_8 = (ws.ws_col/8);
-	//col_16 = (ws.ws_col/16);
+	row_34 = ((row_4 << 1)+row_4);
+	col_3 = (ws.ws_col/3);
+	col_23 = (col_3 << 1);
 
 	pthread_mutex_lock(&mutex);
-
-	reset_right();
-	reset_up();
 
 	for (i = 0; i < ws.ws_row; ++i)
 	  {
 		for (j = 0; j < ws.ws_col-1; ++j)
 		  {
-			if (i == 0)
-				matrix[i][j] = -1;
-			else if (i == ws.ws_row-1)
-				matrix[i][j] = -1;
-			else if (j == 0)
-				matrix[i][j] = -1;
-			else if (j == ws.ws_col-2)
-				matrix[i][j] = -1;
-			else if ((i == ws.ws_row-row_8 || i == row_8) &&
-				((j >= col_8 && j < col_4) ||
-				(j > ws.ws_col-col_4 && j <= ws.ws_col-col_8-1)))
-					matrix[i][j] = -1;
-			else if ((j == col_8 || j == ws.ws_col-col_8-1) &&
-				((i >= row_8 && i < row_4) ||
-				(i <= ws.ws_row-row_8 && i > ws.ws_row-row_4)))
-					matrix[i][j] = -1;
-			else if (i == row_8 &&
-				(j >= (ws.ws_col/3) && j < ((ws.ws_col/3)*2)))
-					matrix[i][j] = -1;
-			else if ((j == (ws.ws_col/3) || j == ((ws.ws_col/3)*2)) &&
-				((i >= row_8 && i < (row_8 + row_16)) ||
-				(i <= (row_8 + row_4) && i > ((row_8 + row_4)-row_16))))
-					matrix[i][j] = -1;
-			else if (i == (row_4 + row_8) &&
-				((j <= (ws.ws_col/3) && j > ((ws.ws_col/3)-(ws.ws_col/8))) ||
-				(j >= ((ws.ws_col/3)*2) && j < (((ws.ws_col/3)*2)+(ws.ws_col/8)))))
-					matrix[i][j] = -1;
-			else if ((j == ((ws.ws_col/3)-(ws.ws_col/8)) || (j == (((ws.ws_col/3)*2)+(ws.ws_col/8)))) &&
-				(i >= (row_8 + row_4) && i < (((ws.ws_row/2) + row_8))))
-					matrix[i][j] = -1;
-			else if (i == ((ws.ws_row/2) + row_8) &&
-				((j >= ((ws.ws_col/3)-(ws.ws_col/8)) && j < ((ws.ws_col/2)-(ws.ws_col/8))) ||
-				(j <= (((ws.ws_col/3)*2)+(ws.ws_col/8)) && j > ((ws.ws_col/2)+(ws.ws_col/8)))))
-					matrix[i][j] = -1;
-			else
-				matrix[i][j] = 0;
+			if (i == 0 || i == ws.ws_row-1) matrix[i][j] = -1;
+			else if (j == 0 || j == ws.ws_col-2) matrix[i][j] = -1;
+			else matrix[i][j] = 0;
 		  }
 	  }
+
+	j = col_3;
+	i = row_4;
+
+	while (i < row_34)
+		matrix[i++][j] = -1;
+
+	j = col_23;
+	i = row_4;
+
+	while (i < row_34)
+		matrix[i++][j] = -1;
 
 	reset_right();
 	reset_up();
