@@ -644,7 +644,7 @@ setup_game(void)
 		goto fail;
 
 	shead.sl = 2;
-	change_level(2);
+	change_level(1);
 	//level_one();
 
 	thread_failed &= ~thread_failed;
