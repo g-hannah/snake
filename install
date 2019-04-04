@@ -4,8 +4,8 @@
 ## OS X always complains about __nonnull and __wur ##
 #####################################################
 if [ "${OSTYPE}" == "darwin" ] || [ "${OSTYPE}" == "freebsd" ] ; then
-	sed -i '' 's/ __nonnull.*;/;/' ./snake.c
-	sed -i '' 's/ __wur.*;/;/' ./snake.c
+	sed -i '' 's/ __nonnull.*;/;/' "./snake.c" "./libs/screenlib.c" "./libs/screenlib.h"
+	sed -i '' 's/ __wur.*;/;/' "./snake.c" "./libs/screenlib.c" "./libs/screenlib.h"
 fi
 
 #####################################################
