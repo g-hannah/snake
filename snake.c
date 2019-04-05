@@ -42,6 +42,15 @@ volatile sig_atomic_t	tid_food_end;
 volatile sig_atomic_t	tid_dir_end;
 volatile sig_atomic_t	tid_score_end;
 volatile sig_atomic_t	put_some_food_end;
+volatile sig_atomic_t	EATEN;
+volatile sig_atomic_t	ate_food;
+volatile sig_atomic_t	gameover;
+volatile sig_atomic_t	thread_failed;
+volatile sig_atomic_t	user_ctrl_c;
+
+volatile int		score;
+volatile int		level;
+volatile int		featen;
 
 pthread_attr_t		attr;
 pthread_mutex_t		mutex;
@@ -65,13 +74,6 @@ int			USLEEP_TIME;
 int			FOOD_REFRESH_TIME;
 int			maxr, minr, maxu, minu;
 char			DIRECTION;
-volatile int		EATEN;
-volatile int		level;
-volatile int		featen;
-volatile int		score;
-volatile int		ate_food;
-volatile int		gameover;
-volatile int		thread_failed;
 int			LEVEL_THRESHOLD;
 
 int			**matrix;
@@ -177,13 +179,14 @@ __attribute__ ((constructor)) snake_init(void)
 
 	level = 1;
 	// _thresh
-	LEVEL_THRESHOLD = 1;
+	LEVEL_THRESHOLD = 30;
 	gameover &= ~gameover;
 
 	tid_food_end = 0;
 	tid_dir_end = 0;
 	tid_score_end = 0;
 	put_some_food_end = 0;
+	user_ctrl_c = 0;
 
 	memset(&shead, 0, sizeof(shead));
 	memset(&stail, 0, sizeof(stail));
@@ -192,22 +195,13 @@ __attribute__ ((constructor)) snake_init(void)
 	if ((path_max = pathconf("/", _PC_PATH_MAX)) == 0)
 		path_max = 1024;
 
-	debug("allocating memory for high_score_file");
-#ifndef WIN32
-	if (posix_memalign((void **)&high_score_file, 16, path_max) < 0)
-	  { log_err("snake_init: posix_memalign error for high_score_file"); goto fail; }
-#else
 	if (!(high_score_file = calloc(path_max, 1)))
 	  { log_err("snake_init: calloc error for high_score_file"); goto fail; }
-#endif
-	debug("high_score_file = %p", high_score_file);
 
 	memset(high_score_file, 0, path_max);
 
 	if (!(user_home = getenv("HOME")))
 	  { log_err("snake_init: failed to get user's home directory"); goto fail; }
-
-	debug("got user home: \"%s\"", user_home);
 
 	/* first check the existence of the snake directory itself */
 	sprintf(high_score_file, "%s/.snake", user_home);
@@ -225,8 +219,6 @@ __attribute__ ((constructor)) snake_init(void)
 
 	if (!(hs_fp = fopen(high_score_file, "r+")))
 	  { log_err("snake_init: fopen error"); goto fail; }
-
-	debug("opened \"%s\"", high_score_file);
 
 	NEW_BEST_PLAYER &= ~NEW_BEST_PLAYER;
 	BEAT_OWN_SCORE &= ~BEAT_OWN_SCORE;
@@ -285,19 +277,33 @@ __attribute__ ((destructor)) snake_fini(void)
 	if (hs_fp != NULL) { fclose(hs_fp); hs_fp = NULL; }
 }
 
+
+sigjmp_buf	main_env;
+
 void
-main_thread_handle_sig(int signo)
+main_thread_sig_handler(int signo)
 {
+	/* If the player pressed ctrl+c, then we want to be able
+	 * to save their score before exiting. So set the flag
+	 * and do a siglongjmp() before the main loop in main().
+	 * Equally, we want to handle a thread failing. In both
+	 * cases, the body of sigsetjmp() will save the player's
+	 * score.
+	 */
 	if (signo == SIGINT)
 	  {
-		if (check_current_player_score(player, player_list->first, player_list->last) < 0);
-		if (write_high_scores(player_list->first, player_list->last) < 0);
-		thread_failed = 1;
+		user_ctrl_c = 1;
+		siglongjmp(main_env, 1);
 		return;
 	  }
-	else if (signo == SIGUSR1)
+	else if (signo == SIGTERM)
 	  {
- 		siglongjmp(main_thread_env, 1);
+		thread_failed = 1;
+		siglongjmp(main_env, 1);
+	  }
+	else
+	  {
+		return;
 	  }
 }
 
@@ -305,11 +311,31 @@ main_thread_handle_sig(int signo)
 int
 main(int argc, char *argv[])
 {
+	struct sigaction	sigterm_n;
+	struct sigaction	sigint_n;
 	char			c, choice[4];
-	struct sigaction	nact, oact;
 	int			i, j;
 	int			play_again, quit;
 	int			tfd;
+
+	memset(&sigterm_n, 0, sizeof(sigterm_n));
+	memset(&sigint_n, 0, sizeof(sigint_n));
+
+	sigterm_n.sa_handler = main_thread_sig_handler;
+	sigterm_n.sa_flags = 0;
+	sigemptyset(&sigterm_n.sa_mask);
+	sigaddset(&sigterm_n.sa_mask, SIGINT);
+
+	if (sigaction(SIGTERM, &sigterm_n, NULL) < 0)
+	  { log_err("main: failed to set signal handler for SIGTERM"); goto fail; }
+
+	sigint_n.sa_handler = main_thread_sig_handler;
+	sigint_n.sa_flags = 0;
+	sigemptyset(&sigint_n.sa_mask);
+	sigaddset(&sigint_n.sa_mask, SIGTERM);
+
+	if (sigaction(SIGINT, &sigint_n, NULL) < 0)
+	  { log_err("main: failed to set signal handler for SIGINT"); goto fail; }
 
 	/* get terminal window dimensions:
 	 *
@@ -419,16 +445,6 @@ main(int argc, char *argv[])
 	reset_right();
 	reset_up();
 
-	/* set up signal handler */
-	memset(&nact, 0, sizeof(nact));
-	memset(&oact, 0, sizeof(oact));
-
-	nact.sa_handler = main_thread_handle_sig;
-	nact.sa_flags = 0;
-	sigemptyset(&nact.sa_mask);
-	if (sigaction(SIGUSR1, &nact, &oact) < 0)
-	  { fprintf(stderr, "main: failed to establish signal handler for SIGUSR1\n"); goto fail; }
-
 	while ((c = getopt(argc, argv, "D")) != -1)
 	  {
 		switch(c)
@@ -460,6 +476,8 @@ main(int argc, char *argv[])
 			matrix[i][j] = 0;
 	  }
 
+	user_ctrl_c = 0;
+
 	game_loop:
 	tid_dir_end = 0;
 	tid_food_end = 0;
@@ -467,6 +485,21 @@ main(int argc, char *argv[])
 
 	if (setup_game() == -1)
 		goto fail;
+
+	if (sigsetjmp(main_env, 1) != 0)
+	  {
+		if (user_ctrl_c)
+		  {
+			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			exit(EXIT_SUCCESS);
+		  }
+		else if (thread_failed)
+		  {
+			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			fprintf(stderr, "main: received SIGTERM from worker thread... exiting!\n");
+			goto fail;
+		  }
+	  }
 
 	for(;;)
 	  {
@@ -481,6 +514,14 @@ main(int argc, char *argv[])
 			EATEN = 1; // ensures first thing done is check value of tid_food_end
 
 			pthread_kill(tid_food, SIGUSR2);
+
+			/*
+			 * Worker thread that gets the user direction will be interrupted
+			 * (more than likely from read() system call, its signal handler
+			 * will do a siglongjmp() to just before its main loop, and then
+			 * TID_DIR_END will be set to 1. The thread will then pass over
+			 * the loop and exit with (void *)0;
+			 */
 			pthread_kill(tid_dir, SIGQUIT);
 			usleep(5000);
 
@@ -601,9 +642,12 @@ main(int argc, char *argv[])
 		  }
 		if (thread_failed)
 		  {
-			pthread_kill(tid_snake, SIGINT);
-			pthread_kill(tid_food, SIGINT);
-			sigaction(SIGUSR1, &oact, NULL);
+			// so that the compiler does not complain about unused result
+			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			if (write_high_scores(player_list->first, player_list->last) < 0);
+
+			pthread_kill(tid_snake, SIGTERM);
+			pthread_kill(tid_food, SIGTERM);
 			goto fail;
 		  }
 	  }
@@ -1151,8 +1195,13 @@ update_sleep(void *arg)
 }*/
 
 static void
-put_some_food_signal_handler(int signo)
+put_some_food_sig_handler(int signo)
 {
+	/* We just need to return and nothing more;
+	 * the snake ate the food; so interrupt this
+	 * worker thread from sleep() and let it put
+	 * another piece of food on the screen
+	 */
 	return;
 }
 
@@ -1160,7 +1209,18 @@ put_some_food_signal_handler(int signo)
 void *
 put_some_food(void *arg)
 {
-	signal(SIGUSR2, put_some_food_signal_handler);
+	struct sigaction	sigusr2;
+
+	memset(&sigusr2, 0, sizeof(sigusr2));
+
+	sigusr2.sa_handler = put_some_food_sig_handler;
+	sigusr2.sa_flags = 0;
+	sigemptyset(&sigusr2.sa_mask);
+	if (sigaction(SIGUSR2, &sigusr2, NULL) < 0)
+	  {
+		pthread_kill(tid_main, SIGTERM);
+		pthread_exit((void *)-1);
+	  }
 
 	memset(&f, 0, sizeof(f));
 	f.maxr = ws.ws_col-2;
@@ -1558,9 +1618,12 @@ go_to_tail(Snake_Head *h, Snake_Tail *t)
 	return;
 }
 
+sigjmp_buf	get_direction_env;
+
 static void
 get_direction_sig_handler(int signo)
 {
+	siglongjmp(get_direction_env, 1);
 	return;
 }
 
@@ -1573,10 +1636,27 @@ get_direction(void *arg)
 	int			i;
 	int			ret;
 	struct termios		term, old;
+	struct sigaction	sigquit_n;
 
-	signal(SIGQUIT, get_direction_sig_handler);
+	memset(&sigquit_n, 0, sizeof(sigquit_n));
 
-	/* switch off terminal driver echo */
+	sigquit_n.sa_handler = get_direction_sig_handler;
+	sigquit_n.sa_flags = 0;
+	sigemptyset(&sigquit_n.sa_mask);
+
+	if (sigaction(SIGQUIT, &sigquit_n, NULL) < 0)
+	  {
+		pthread_kill(tid_main, SIGTERM);
+		pthread_exit((void *)-1);
+	  }
+
+	/*
+	 * Disable echoing in terminal and put terminal
+	 * into non-canonical mode so that we do not
+	 * require a newline character after each direction
+	 * key is pressed in order for it to be sent to the
+	 * process
+	 */
 	memset(&term, 0, sizeof(term));
 	memset(&old, 0, sizeof(old));
 	fd = open("/dev/tty", O_RDWR);
@@ -1587,6 +1667,9 @@ get_direction(void *arg)
 
 	for (i = 0; i < 4; ++i)
 		c[i] &= ~(c[i]);
+
+	if (sigsetjmp(get_direction_env, 1) != 0)
+		tid_dir_end = 1;
 
 	while (!tid_dir_end)
 	  {
@@ -1865,7 +1948,7 @@ game_over(void)
 	fputc(0x20, stdout);
 	usleep(char_delay);
 
-	for (i = 0; i < 8000; ++i)
+	for (i = 0; i < 6000; ++i)
 	  {
 		if (player->score == 0)
 		  {
@@ -1916,7 +1999,7 @@ game_over(void)
 	fputc(0x20, stdout);
 	usleep(char_delay);
 
-	for (i = 0; i < 8000; ++i)
+	for (i = 0; i < 6000; ++i)
 	  {
 		if (player->num_eaten < 10)
 		  {
@@ -2127,7 +2210,7 @@ level_two(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 20000;
+	USLEEP_TIME -= 10000;
 
 	return;
 }
@@ -2195,7 +2278,7 @@ level_three(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 20000;
+	USLEEP_TIME -= 10000;
 
 	return;
 }
@@ -2280,7 +2363,7 @@ level_four(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 20000;
+	USLEEP_TIME -= 10000;
 
 	return;
 }
