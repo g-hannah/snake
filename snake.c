@@ -177,7 +177,7 @@ __attribute__ ((constructor)) snake_init(void)
 
 	level = 1;
 	// _thresh
-	LEVEL_THRESHOLD = 30;
+	LEVEL_THRESHOLD = 1;
 	gameover &= ~gameover;
 
 	tid_food_end = 0;
