@@ -392,6 +392,43 @@ main(int argc, char *argv[])
 	//right(ws.ws_col/2);
 	memset(player->name, 0, 32);
 
+	if (sigsetjmp(main_env, 1) != 0)
+	  {
+		if (user_ctrl_c)
+		  {
+			pthread_mutex_lock(&mutex);
+			reset_right();
+			reset_up();
+			pthread_mutex_unlock(&mutex);
+
+			if (player_list)
+				if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
+			exit(EXIT_SUCCESS);
+		  }
+		else if (thread_failed)
+		  {
+			pthread_mutex_lock(&mutex);
+			reset_right();
+			reset_up();
+			pthread_mutex_unlock(&mutex);
+
+			if (player_list)
+				if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
+			fprintf(stderr, "main: received SIGTERM from worker thread... exiting!\n");
+			goto fail;
+		  }
+		else
+		  {
+			pthread_mutex_lock(&mutex);
+			reset_right();
+			reset_up();
+			pthread_mutex_unlock(&mutex);
+
+			fprintf(stderr, "*** Caught SIGINT. Quitting ***\n");
+			exit(EXIT_SUCCESS);
+		  }
+	  }
+
 	c = 0;
 	i = 0;
 
@@ -496,20 +533,6 @@ main(int argc, char *argv[])
 	if (setup_game() == -1)
 		goto fail;
 
-	if (sigsetjmp(main_env, 1) != 0)
-	  {
-		if (user_ctrl_c)
-		  {
-			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
-			exit(EXIT_SUCCESS);
-		  }
-		else if (thread_failed)
-		  {
-			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
-			fprintf(stderr, "main: received SIGTERM from worker thread... exiting!\n");
-			goto fail;
-		  }
-	  }
 
 	for(;;)
 	  {
