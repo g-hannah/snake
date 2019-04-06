@@ -139,7 +139,7 @@ __attribute__ ((constructor)) snake_init(void)
 	int		ret = 0;
 	int		tfd = -1;
 
-	DEBUG &= ~DEBUG;
+	DEBUG = 0;
 
 	/* seed random number generator */
 	srand(time(NULL));
@@ -185,7 +185,7 @@ __attribute__ ((constructor)) snake_init(void)
 	level = 1;
 	// _thresh
 	LEVEL_THRESHOLD = 30;
-	gameover &= ~gameover;
+	gameover = 0;
 
 	tid_food_end = 0;
 	tid_dir_end = 0;
@@ -196,7 +196,7 @@ __attribute__ ((constructor)) snake_init(void)
 	memset(&shead, 0, sizeof(shead));
 	memset(&stail, 0, sizeof(stail));
 
-	path_max &= ~path_max;
+	path_max = 0;
 	if ((path_max = pathconf("/", _PC_PATH_MAX)) == 0)
 		path_max = 1024;
 
@@ -224,9 +224,6 @@ __attribute__ ((constructor)) snake_init(void)
 
 	if (!(hs_fp = fopen(high_score_file, "r+")))
 	  { log_err("snake_init: fopen error"); goto fail; }
-
-	NEW_BEST_PLAYER &= ~NEW_BEST_PLAYER;
-	BEAT_OWN_SCORE &= ~BEAT_OWN_SCORE;
 
 	if (!(player = malloc(sizeof(Player))))
 	  { log_err("snake_init: malloc error"); goto fail; }
@@ -396,7 +393,7 @@ main(int argc, char *argv[])
 	memset(player->name, 0, 32);
 
 	c = 0;
-	i &= ~i;
+	i = 0;
 
 	// MAIN : GET PLAYER NAME
 	while (c != 0x0a)
@@ -538,7 +535,7 @@ main(int argc, char *argv[])
 			pthread_kill(tid_dir, SIGQUIT);
 			usleep(5000);
 
-			gameover &= ~gameover;
+			gameover = 0;
 
 			player->score &= ~(player->score);
 			player->num_eaten &= ~(player->num_eaten);
@@ -610,7 +607,14 @@ main(int argc, char *argv[])
 						if (get_high_scores(&player_list->first, &player_list->last) == -1)
 						  { log_err("main: get_high_scores error"); goto fail; }
 
-						EATEN &= ~EATEN;
+						player_prev = NULL;
+
+						find_player_prev(&player,
+								&player_prev,
+								player_list->first,
+								player_list->last);
+
+						EATEN = 0;
 						level = 1;
 						goto game_loop;
 					  }
@@ -627,7 +631,7 @@ main(int argc, char *argv[])
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", MENU_BG_COL, TWHITE);
 					play_again = 1;
-					quit &= ~quit;
+					quit = 0;
 					for (i = 0; i < 4; ++i) choice[i] = 0;
 					reset_right();
 					reset_up();
@@ -641,7 +645,7 @@ main(int argc, char *argv[])
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", RED, TWHITE);
 					quit = 1;
-					play_again &= ~play_again;
+					play_again = 0;
 					for (i = 0; i < 4; ++i) choice[i] = 0;
 					reset_right();
 					reset_up();
@@ -680,7 +684,7 @@ setup_game(void)
 
 	/* start with a single piece; head and tail both point to same piece */
 
-	EATEN &= ~EATEN;
+	EATEN = 0;
 
 	if (!shead.h)
 	  {
@@ -704,7 +708,7 @@ setup_game(void)
 	change_level(1);
 	//level_one();
 
-	thread_failed &= ~thread_failed;
+	thread_failed = 0;
 	/* create threads */
 	if (pthread_create(&tid_snake, &attr, snake_thread, NULL) != 0)
 		goto fail;
@@ -1181,7 +1185,7 @@ track_score(void *arg)
 	  {
 		if (ate_food)
 		  {
-			ate_food &= ~ate_food;
+			ate_food = 0;
 			(player->score += (level * 10));
 			pthread_mutex_lock(&mutex);
 			write_stats();
@@ -1260,7 +1264,7 @@ put_some_food(void *arg)
 		  	  }
 		  }
 
-		EATEN &= ~EATEN;
+		EATEN = 0;
 
 		log_mutex("lock", "mutex");
 		pthread_mutex_lock(&mutex);
@@ -1416,9 +1420,7 @@ grow_tail(Snake_Tail *tail)
 void
 grow_snake(Snake_Head *h, Snake_Tail *t)
 {
-	int	DONE;
-
-	DONE &= ~DONE;
+	int	DONE = 0;
 
 	pthread_mutex_lock(&mutex);
 	pthread_mutex_lock(&smutex);
@@ -1762,9 +1764,7 @@ int
 hit_own_body(Snake_Head *h, Snake_Tail *t)
 {
 	Snake_Piece	*p = NULL;
-	int		HIT;
-
-	HIT &= ~HIT;
+	int		HIT = 0;
 
 	pthread_mutex_lock(&smutex);
 	for (p = t->t; p->next != NULL; p = p->next)
@@ -1816,9 +1816,7 @@ int
 within_snake(Food *f)
 {
 	Snake_Piece	*p = NULL;
-	int		WITHIN;
-
-	WITHIN &= ~WITHIN;
+	int		WITHIN = 0;
 
 	pthread_mutex_lock(&smutex);
 	for (p = stail.t; p->next != NULL; p = p->next)
@@ -2051,8 +2049,8 @@ game_over(void)
 	reset_up();
 	pthread_mutex_unlock(&mutex);
 
-	NEW_BEST_PLAYER &= ~NEW_BEST_PLAYER;
-	BEAT_OWN_SCORE &= ~BEAT_OWN_SCORE;
+	NEW_BEST_PLAYER = 0;
+	BEAT_OWN_SCORE = 0;
 
 	return(0);
 
@@ -2638,10 +2636,10 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	int		head_r = 0, head_u = 0;
 	int		save_r = 0, save_u = 0;
 	int		slen = 0;
-	int		i, j;
+	int		i = 0, j = 0;
 	int		delta_d = 0, delta_u = 0, delta_r = 0, delta_l = 0;
 	int		bad_l = 0, bad_r = 0, bad_u = 0, bad_d = 0;
-	char		dir;
+	char		dir = 0;
 
 	pthread_mutex_lock(&mutex);
 	pthread_mutex_lock(&smutex);
@@ -2657,10 +2655,10 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 	if (matrix[head_u][head_r] == -1)
 	  {
-		bad_r &= ~bad_r;
-		bad_l &= ~bad_l;
-		bad_u &= ~bad_u;
-		bad_d &= ~bad_d;
+		bad_r = 0;
+		bad_l = 0;
+		bad_u = 0;
+		bad_d = 0;
 
 		save_u = head_u;
 
@@ -2709,10 +2707,10 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	 * the distance, and then proceed to draw the snake backwards in
 	 * the screen matrix
 	 */
-	delta_d &= ~delta_d;
-	delta_u &= ~delta_u;
-	delta_r &= ~delta_r;
-	delta_l &= ~delta_l;
+	delta_d = 0;
+	delta_u = 0;
+	delta_r = 0;
+	delta_l = 0;
 
 	save_u = head_u;
 	save_r = head_r;
@@ -2809,8 +2807,8 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 				if (slen >= h->sl) goto fini;
 			  }
 
-			delta_u &= ~delta_u;
-			delta_d &= ~delta_d;
+			delta_u = 0;
+			delta_d = 0;
 
 			save_u = head_u;
 
@@ -2856,8 +2854,9 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 				++slen; ++(t->t->l);
 				if (slen >= h->sl) goto fini;
 			  }
-			delta_u &= ~delta_u;
-			delta_d &= ~delta_d;
+
+			delta_u = 0;
+			delta_d = 0;
 
 			save_u = head_u;
 
@@ -2904,8 +2903,9 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 				++slen; ++(t->t->l);
 				if (slen >= h->sl) goto fini;
 			  }
-			delta_l &= ~delta_l;
-			delta_r &= ~delta_r;
+
+			delta_l = 0;
+			delta_r = 0;
 
 			save_r = head_r;
 
@@ -2951,8 +2951,9 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 				++slen; ++(t->t->l);
 				if (slen >= h->sl) goto fini;
 			  }
-			delta_l &= ~delta_l;
-			delta_r &= ~delta_r;
+
+			delta_l = 0;
+			delta_r = 0;
 
 			save_r = head_r;
 
@@ -3452,8 +3453,6 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 	int		cnt = 0;
 	char		*arrows = ">>>>>>>>>>>>>>>>>>>>";
 
-	cnt &= ~cnt;
-
 	pthread_mutex_lock(&mutex);
 
 	reset_right();
@@ -3783,7 +3782,7 @@ save_screen_format(Snake_Head *h, Snake_Tail *t)
 			case(0x75):
 			if (p != t->t)
 				++u;
-			l &= ~l;
+			l = 0;
 			while (l < p->l)
 			  {
 				matrix[u][r] = 1;
@@ -3794,7 +3793,7 @@ save_screen_format(Snake_Head *h, Snake_Tail *t)
 			case(0x64):
 			if (p != t->t)
 				--u;
-			l &= ~l;
+			l = 0;
 			while (l < p->l)
 			  {
 				matrix[u][r] = 1;
@@ -3805,7 +3804,7 @@ save_screen_format(Snake_Head *h, Snake_Tail *t)
 			case(0x6c):
 			if (p != t->t)
 				--r;
-			l &= ~l;
+			l = 0;
 			while (l < p->l)
 			  {
 				matrix[u][r] = 1;
@@ -3816,7 +3815,7 @@ save_screen_format(Snake_Head *h, Snake_Tail *t)
 			case(0x72):
 			if (p != t->t)
 				++r;
-			l &= ~l;
+			l = 0;
 			while (l < p->l)
 			  {
 				matrix[u][r] = 1;
