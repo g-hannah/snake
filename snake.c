@@ -15,15 +15,16 @@ char			*high_score_file = NULL;
 int			path_max;
 char			*tmp = NULL;
 
-Player_List		*player_list;
-Player			*player;
+Player_List		*player_list = NULL;
+Player			*player = NULL;
+Player			*player_prev = NULL;
 
 char			save_name[32];
 
 struct termios		nterm, oterm;
 struct winsize		ws;
-int			row_2, row_3, row_23, row_4, row_8, row_16, row_max;
-int			col_2, col_3, col_23, col_4, col_8, col_16, col_max;
+int			row_2, row_3, row_23, row_4, row_5, row_34, row_8, row_16, row_max;
+int			col_2, col_3, col_23, col_4, col_5, col_34, col_8, col_16, col_max;
 struct Snake_Head	shead;
 struct Snake_Tail	stail;
 Food			f;
@@ -69,18 +70,20 @@ char			*HD_COL = NULL;
 char			*FD_COL = NULL;
 char			*MENU_BG_COL = NULL;
 char			*TEXT_SHADOW_COL = NULL;
-int			DEFAULT_USLEEP_TIME;
-int			USLEEP_TIME;
-int			FOOD_REFRESH_TIME;
-int			maxr, minr, maxu, minu;
-char			DIRECTION;
-int			LEVEL_THRESHOLD;
+int			DEFAULT_USLEEP_TIME = 0;
+int			USLEEP_TIME = 0;
+int			USLEEP_VADJUST = 0;
+int			USLEEP_DECREMENT = 10000;
+int			FOOD_REFRESH_TIME = 0;
+int			maxr = 0, minr = 0, maxu = 0, minu = 0;
+char			DIRECTION = 0;
+int			LEVEL_THRESHOLD = 0;
 
-int			**matrix;
+int			**matrix = NULL;
 
 /* player stats-related variables */
-int BEAT_OWN_SCORE;
-int NEW_BEST_PLAYER;
+int BEAT_OWN_SCORE = 0;
+int NEW_BEST_PLAYER = 0;
 
 void log_err(char *, ...) __nonnull ((1));
 void debug(char *, ...) __nonnull ((1));
@@ -89,10 +92,12 @@ static int get_default_sleep_time(void) __wur;
 static inline void write_stats(void);
 static int write_high_scores(Player *, Player *) __nonnull ((1,2)) __wur;
 static int get_high_scores(Player **, Player **) __nonnull ((1,2)) __wur;
+static void find_player_prev(Player **, Player **, Player *, Player *) __nonnull ((1,2,3,4));
 static void free_high_scores(Player **, Player **) __nonnull ((1,2));
 static Player *new_player_node(void) __wur;
+static int remove_player_node(Player **, Player **, Player **) __nonnull ((1,2,3)) __wur;
 static int show_hall_of_fame(Player *, Player *) __nonnull ((1,2)) __wur;
-static int check_current_player_score(Player *, Player *, Player *) __nonnull ((1,2,3)) __wur;
+static int check_current_player_score(Player *, Player **, Player **) __nonnull ((1,2,3)) __wur;
 
 static void save_screen_format(Snake_Head *, Snake_Tail *) __nonnull ((1,2));
 static void restore_screen_format(void);
@@ -131,8 +136,8 @@ void strip_crnl(char *) __nonnull ((1));
 static void
 __attribute__ ((constructor)) snake_init(void)
 {
-	int		ret;
-	int		tfd;
+	int		ret = 0;
+	int		tfd = -1;
 
 	DEBUG &= ~DEBUG;
 
@@ -245,7 +250,7 @@ __attribute__ ((constructor)) snake_init(void)
 
 	FOOD_REFRESH_TIME = 12;
 
-	MENU_BG_COL = LIGHT_GREY;
+	MENU_BG_COL = BLACK;
 	TEXT_SHADOW_COL = DARK_RED;
 
 	return;
@@ -257,7 +262,7 @@ __attribute__ ((constructor)) snake_init(void)
 static void
 __attribute__ ((destructor)) snake_fini(void)
 {
-	int		tfd;
+	int		tfd = -1;
 
 	free_high_scores(&player_list->first, &player_list->last);
 
@@ -315,8 +320,8 @@ main(int argc, char *argv[])
 	struct sigaction	sigint_n;
 	char			c, choice[4];
 	int			i, j;
-	int			play_again, quit;
-	int			tfd;
+	int			play_again = 0, quit = 0;
+	int			tfd = -1;
 
 	memset(&sigterm_n, 0, sizeof(sigterm_n));
 	memset(&sigint_n, 0, sizeof(sigint_n));
@@ -357,6 +362,8 @@ main(int argc, char *argv[])
 	row_23 = (row_3 * 2);
 	row_2 = (ws.ws_row/2);
 	row_4 = (row_2/2);
+	row_34 = (row_2 + row_4);
+	row_5 = (ws.ws_row/5);
 	row_8 = (row_4/2);
 	row_16 = (row_8/2);
 	row_max = ws.ws_row;
@@ -365,11 +372,14 @@ main(int argc, char *argv[])
 	col_23 = (col_3 * 2);
 	col_2 = (ws.ws_col/2);
 	col_4 = (col_2/2);
+	col_34 = (col_2 + col_4);
+	col_5 = (ws.ws_col/5);
 	col_8 = (col_4/2);
 	col_16 = (col_8/2);
 	col_max = (ws.ws_col-1);
 
 	USLEEP_TIME = get_default_sleep_time();
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 	clear_screen(MENU_BG_COL);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
@@ -388,6 +398,7 @@ main(int argc, char *argv[])
 	c = 0;
 	i &= ~i;
 
+	// MAIN : GET PLAYER NAME
 	while (c != 0x0a)
 	  {
 		c = fgetc(stdin);
@@ -442,6 +453,8 @@ main(int argc, char *argv[])
 	player->num_eaten = 0;
 	player->highest_level = 1;
 
+	find_player_prev(&player, &player_prev, player_list->first, player_list->last);
+
 	reset_right();
 	reset_up();
 
@@ -490,12 +503,12 @@ main(int argc, char *argv[])
 	  {
 		if (user_ctrl_c)
 		  {
-			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
 			exit(EXIT_SUCCESS);
 		  }
 		else if (thread_failed)
 		  {
-			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
 			fprintf(stderr, "main: received SIGTERM from worker thread... exiting!\n");
 			goto fail;
 		  }
@@ -643,7 +656,7 @@ main(int argc, char *argv[])
 		if (thread_failed)
 		  {
 			// so that the compiler does not complain about unused result
-			if (check_current_player_score(player, player_list->first, player_list->last) < 0);
+			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
 			if (write_high_scores(player_list->first, player_list->last) < 0);
 
 			pthread_kill(tid_snake, SIGTERM);
@@ -850,6 +863,7 @@ snake_thread(void *arg)
 	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
+	USLEEP_TIME += USLEEP_VADJUST;
 	for (;;)
 	  {
 		log_mutex("lock", "mutex");
@@ -917,6 +931,7 @@ snake_thread(void *arg)
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x75)
 		  {
+			USLEEP_TIME -= USLEEP_VADJUST;
 			switch(DIRECTION)
 			  {
 				case(0x6c):
@@ -953,6 +968,7 @@ snake_thread(void *arg)
 	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
+	USLEEP_TIME += USLEEP_VADJUST;
 	for (;;)
 	  {
 		log_mutex("lock", "mutex");
@@ -1019,6 +1035,7 @@ snake_thread(void *arg)
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x64)
 		  {
+			USLEEP_TIME -= USLEEP_VADJUST;
 			switch(DIRECTION)
 			  {
 				case(0x6c):
@@ -1854,7 +1871,6 @@ int
 game_over(void)
 {
 	int		i, j;
-	char		*game_over_string = "Game Over";
 	char		*your_score_string = "Your Score";
 	char		*your_num_eaten_string = "Food Eaten";
 	char		*beat_record_string = "You beat the all time record!";
@@ -1876,7 +1892,7 @@ game_over(void)
 	char_delay = 90000;
 
 	clear_screen(MENU_BG_COL);
-	if (check_current_player_score(player, player_list->first, player_list->last) < 0)
+	if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0)
 	  { log_err("game_over: check_current_player error"); goto fail; }
 
 	if (write_high_scores(player_list->first, player_list->last) < 0)
@@ -1888,7 +1904,26 @@ game_over(void)
 	pthread_mutex_lock(&mutex);
 	reset_cursor();
 
-	up((ws.ws_row/2)+(ws.ws_row/4)+(ws.ws_row/8));
+	if (NEW_BEST_PLAYER)
+	  {
+		up(row_max - row_16);
+
+		center_x((strlen(beat_record_string)/2)+4, 0);
+		printf("%s%s!!! %s !!!\e[m", MENU_BG_COL, TPINK, beat_record_string);
+		reset_right();
+		reset_up();
+	  }
+	else if (BEAT_OWN_SCORE)
+	  {
+		up(row_max - row_16);
+
+		center_x((strlen(beat_own_score_string)/2)+4, 0);
+		printf("%s%s!!! %s !!!\e[m", MENU_BG_COL, TPINK, beat_own_score_string);
+		reset_right();
+		reset_up();
+	  }
+
+	up(row_max - row_8);
 	center_x((65/2), 0);
 
 	for (i = 0; i < 8; ++i)
@@ -1909,46 +1944,17 @@ game_over(void)
 	  }
 
 	reset_right();
-	down(1);
-
-	right((ws.ws_col/2) - (strlen(game_over_string)/2));
-	printf("%s%s", MENU_BG_COL, TWHITE);
-	for (i = 0; i < strlen(game_over_string); ++i)
-	  { fputc(game_over_string[i], stdout); usleep(char_delay); }
-
-	printf("\e[m");
-	reset_right();
 	down(2);
 
-	if (NEW_BEST_PLAYER)
-	  {
-		right((ws.ws_col/2)-(strlen(beat_record_string)/2) - 4);
-		printf("%s%s", MENU_BG_COL, TWHITE);
-		for (i = 0; i < strlen(beat_record_string); ++i)
-		  { fputc(beat_record_string[i], stdout); usleep(char_delay); }
-		printf("\e[m");
-		reset_right();
-		down(1);
-	  }
-	else if (BEAT_OWN_SCORE)
-	  {
-		right((ws.ws_col/2)-(strlen(beat_own_score_string)/2) - 4);
-		printf("%s%s", MENU_BG_COL, TWHITE);
-		for (i = 0; i < strlen(beat_own_score_string); ++i)
-		  { fputc(beat_own_score_string[i], stdout); usleep(char_delay); }
-		reset_right();
-		down(1);
-	  }
-
 	right((ws.ws_col/2)-(strlen(your_score_string)/2)-4);
-	printf("%s%s", MENU_BG_COL, TDARK_GREEN);
+	printf("%s%s", MENU_BG_COL, TGREEN);
 	for (i = 0; i < strlen(your_score_string); ++i)
 	  { fputc(your_score_string[i], stdout); usleep(char_delay); }
 
 	fputc(0x20, stdout);
 	usleep(char_delay);
 
-	for (i = 0; i < 6000; ++i)
+	for (i = 0; i < 4000; ++i)
 	  {
 		if (player->score == 0)
 		  {
@@ -1992,14 +1998,14 @@ game_over(void)
 	reset_right();
 	down(1);
 	right((ws.ws_col/2)-(strlen(your_num_eaten_string)/2)-4);
-	printf("%s%s", MENU_BG_COL, TDARK_GREEN);
+	printf("%s%s", MENU_BG_COL, TGREEN);
 	for (i = 0; i < strlen(your_num_eaten_string); ++i)
 	  { fputc(your_num_eaten_string[i], stdout); usleep(char_delay); }
 
 	fputc(0x20, stdout);
 	usleep(char_delay);
 
-	for (i = 0; i < 6000; ++i)
+	for (i = 0; i < 4000; ++i)
 	  {
 		if (player->num_eaten < 10)
 		  {
@@ -2140,6 +2146,7 @@ level_one(void)
 
 	reset_snake(&shead, &stail);
 	USLEEP_TIME = get_default_sleep_time();
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 
 	return;
 }
@@ -2149,10 +2156,6 @@ void
 level_two(void)
 {
 	int		i, j;
-	int		row_4;
-	int		row_34;
-	int		col_3;
-	int		col_23;
 
 	BR_COL = BLACK;
 	BG_COL = SALMON;
@@ -2160,19 +2163,14 @@ level_two(void)
 	HD_COL = DARK_GREY;
 	FD_COL = PURPLE;
 
-	row_4 = (ws.ws_row/4);
-	row_34 = ((row_4 << 1)+row_4);
-	col_3 = (ws.ws_col/3);
-	col_23 = (col_3 << 1);
-
 	pthread_mutex_lock(&mutex);
 
 	for (i = 0; i < ws.ws_row; ++i)
 	  {
 		for (j = 0; j < ws.ws_col-1; ++j)
 		  {
-			if (i == 0 || i == ws.ws_row-1) matrix[i][j] = -1;
-			else if (j == 0 || j == ws.ws_col-2) matrix[i][j] = -1;
+			if (i == 0 || i == row_max-1) matrix[i][j] = -1;
+			else if (j == 0 || j == col_max-1) matrix[i][j] = -1;
 			else matrix[i][j] = 0;
 		  }
 	  }
@@ -2210,7 +2208,8 @@ level_two(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 10000;
+	USLEEP_TIME -= USLEEP_DECREMENT;
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 
 	return;
 }
@@ -2229,31 +2228,30 @@ level_three(void)
 
 	pthread_mutex_lock(&mutex);
 
-	for (i = 0; i < ws.ws_row; ++i)
+	for (i = 0; i < row_max; ++i)
 	  {
-		for (j = 0; j < ws.ws_col-1; ++j)
+		for (j = 0; j < col_max; ++j)
 		  {
-			if (i == 0)
-				matrix[i][j] = -1;
-			else if (i == ws.ws_row-1)
-				matrix[i][j] = -1;
-			else if (j == 0)
-				matrix[i][j] = -1;
-			else if (j == ws.ws_col-2)
-				matrix[i][j] = -1;
-			else if (((i == ws.ws_row-5) || (i == 5)) &&
-				((j >= 10 && j < 30) || (j <= ws.ws_col-11 && j > ws.ws_col-11-20)))
-				matrix[i][j] = -1;
-			else if ((j == 20 || j == ws.ws_col-11-10) &&
-				((i >= 5 && i < 10) || (i <= ws.ws_row-5 && i > ws.ws_row-10)))
-				matrix[i][j] = -1;
-			else if (((i == (ws.ws_row/2)-(ws.ws_row/8)) || (i == (ws.ws_row/2)+(ws.ws_row/8))) &&
-				(j >= 30 && j < (ws.ws_col-11-20)))
-				matrix[i][j] = -1;
-			else
-				matrix[i][j] = 0;
+			if (i == 0 || i == row_max-1) matrix[i][j] = -1;
+			if (j == 0 || j == col_max-1) matrix[i][j] = -1;
 		  }
 	  }
+
+	j = col_5; i = row_8;
+	while (i < (row_8 + row_2))
+		matrix[i++][j] = -1;
+
+	j = (col_5 << 1); i = (row_max - row_8);
+	while (i > (row_max - row_8 - row_2))
+		matrix[i--][j] = -1;
+
+	j = ((col_5 << 1)+col_5); i = row_8;
+	while (i < (row_8 + row_2))
+		matrix[i++][j] = -1;
+
+	j = (col_max - col_5); i = (row_max - row_8);
+	while (i > (row_max - row_8 - row_2))
+		matrix[i--][j] = -1;
 
 	clear_screen(BG_COL);
 	reset_right();
@@ -2278,7 +2276,8 @@ level_three(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 10000;
+	USLEEP_TIME -= USLEEP_DECREMENT;
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 
 	return;
 }
@@ -2363,7 +2362,8 @@ level_four(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 10000;
+	USLEEP_TIME -= USLEEP_DECREMENT;
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 
 	return;
 }
@@ -2425,7 +2425,8 @@ level_five(void)
 	pthread_mutex_unlock(&mutex);
 
 	reset_snake(&shead, &stail);
-	USLEEP_TIME -= 10000;
+	USLEEP_TIME -= USLEEP_DECREMENT;
+	USLEEP_VADJUST = (USLEEP_TIME/3);
 
 	
 }
@@ -2634,12 +2635,12 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	 * point, the matrix should have been reformatted
 	 */
 
-	int		head_r, head_u;
-	int		save_r, save_u;
-	int		slen;
+	int		head_r = 0, head_u = 0;
+	int		save_r = 0, save_u = 0;
+	int		slen = 0;
 	int		i, j;
-	int		delta_d, delta_u, delta_r, delta_l;
-	int		bad_l, bad_r, bad_u, bad_d;
+	int		delta_d = 0, delta_u = 0, delta_r = 0, delta_l = 0;
+	int		bad_l = 0, bad_r = 0, bad_u = 0, bad_d = 0;
 	char		dir;
 
 	pthread_mutex_lock(&mutex);
@@ -3086,9 +3087,12 @@ write_high_scores(Player *list_head, Player *list_end)
 {
 	Player		*ptr = NULL;
 	Player		player_storage;
-	int		num;
+	int		num = 0;
+	size_t		player_size = 0;
+	size_t		total_size = 0;
+	
+	player_size = sizeof(player_storage);
 
-	num &= ~num;
 	clearerr(hs_fp);
 	fseek(hs_fp, 0, SEEK_SET);
 
@@ -3108,9 +3112,17 @@ write_high_scores(Player *list_head, Player *list_end)
 			goto fail;
 		  }
 
+		total_size += player_size;
+
 		++num;
 		if (num == 100)
 			break;
+	  }
+
+	if (truncate(high_score_file, (off_t)total_size) < 0)
+	  {
+		log_err("write_high_scores: failed to truncate %s to %lu bytes", high_score_file, total_size);
+		goto fail;
 	  }
 
 	return(0);
@@ -3270,14 +3282,12 @@ get_high_scores(Player **list_head, Player **list_end)
 	Player		*nptr = NULL;
 	Player		player_storage;
 	struct stat	statb;
-	size_t		bytes_so_far;
-	int		ret;
+	size_t		bytes_so_far = 0;
+	int		ret = 0;
 
 	memset(&statb, 0, sizeof(statb));
 	if (lstat(high_score_file, &statb) < 0)
 	  { log_err("get_high_scores: lstat error"); goto fail; }
-
-	bytes_so_far &= ~bytes_so_far;
 
 	clearerr(hs_fp);
 	fseek(hs_fp, 0, SEEK_SET);
@@ -3336,6 +3346,20 @@ get_high_scores(Player **list_head, Player **list_end)
 	return(-1);
 }
 
+// FIND_PLAYER_PREV
+void
+find_player_prev(Player **cur_player, Player **player_prev, Player *list_head, Player *list_end)
+{
+	Player		*ptr = NULL;
+
+	for (ptr = list_head; ptr; ptr = ptr->next)
+	  {
+		if (strcmp((*cur_player)->name, ptr->name) == 0)
+		  { *player_prev = ptr; break; }
+	  }
+}
+
+// NEW_PLAYER_NODE
 Player *
 new_player_node(void)
 {
@@ -3349,6 +3373,49 @@ new_player_node(void)
 	new_node->next = NULL;
 
 	return(new_node);
+}
+
+// REMOVE_PLAYER_NODE
+int
+remove_player_node(Player **player, Player **list_head, Player **list_end)
+{
+	Player		*ptr = NULL, *prev = NULL;
+	char		*player_name = NULL;
+
+	if (!(player_name = calloc((strlen((*player)->name) + 0x10) & ~(0xf), 1)))
+	  { log_err("remove_player_node: failed to allocate memory for player name"); goto fail; }
+
+	strncpy(player_name, (*player)->name, strlen((*player)->name));
+	player_name[strlen((*player)->name)] = 0;
+
+	// Incase we have erroneously older records with the same name
+	// find them and also remove them
+	for (ptr = *player; ptr; ptr = ptr->next)
+	  {
+		if (strcmp(player_name, ptr->name) == 0)
+		  {
+			prev = ptr->prev;
+			if (ptr->next)
+		  	  {
+				prev->next = ptr->next;
+				ptr->next->prev = prev;
+		  	  }
+			else
+		  	  {
+				prev->next = NULL;
+				*list_end = prev;
+		  	  }
+
+			free(ptr); ptr = prev;
+		  }
+	  }
+
+	if (player_name != NULL) { free(player_name); player_name = NULL; }
+	return(0);
+
+	fail:
+	if (player_name != NULL) { free(player_name); player_name = NULL; }
+	return(-1);
 }
 
 // FREE_HIGH_SCORES
@@ -3382,7 +3449,7 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 	Player		*ptr = NULL;
 	struct tm	TIME;
 	char		time_string[32];
-	int		cnt;
+	int		cnt = 0;
 	char		*arrows = ">>>>>>>>>>>>>>>>>>>>";
 
 	cnt &= ~cnt;
@@ -3452,87 +3519,190 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 
 // CHECK_CURRENT_PLAYER_SCORE
 int
-check_current_player_score(Player *current_player, Player *list_head, Player *list_end)
+check_current_player_score(Player *current_player, Player **list_head, Player **list_end)
 {
 	Player			*lptr = NULL;
-	int			inserted;
+	int			position;
 
-	inserted &= ~inserted;
 	time(&current_player->when);
-	current_player->position = 1;
+	position = 1;
+
+	BEAT_OWN_SCORE = 0;
+	NEW_BEST_PLAYER = 0;
 
 	pthread_mutex_lock(&list_mutex);
 
-	for (lptr = list_head; lptr != NULL; lptr = lptr->next)
+	/*
+	 * Does this player have a previous record in the list?
+	 */
+	if (player_prev)
 	  {
-		if (strcmp(current_player->name, lptr->name) == 0)
+		if (current_player->score > player_prev->score)
 		  {
+			BEAT_OWN_SCORE = 1;
+			if (remove_player_node(&player_prev, list_head, list_end) < 0)
+				goto fail;
+
+			for (lptr = *list_head; lptr != NULL; lptr = lptr->next)
+			  {
+				if (current_player->score > lptr->score)
+				  {
+					if (lptr == *list_head) // new all time best
+			  		  {
+						NEW_BEST_PLAYER = 1;
+
+						current_player->position = position;
+						lptr->prev = current_player;
+						current_player->next = lptr;
+			  		  }
+					else
+					  {
+						current_player->position = position;
+						lptr->prev->next = current_player;
+						current_player->prev = lptr->prev;
+						current_player->next = lptr;
+						lptr->prev = current_player;
+					  }
+
+					while (lptr)
+					  {
+						++(lptr->position);
+						lptr = lptr->next;
+					  }
+
+					break;
+				  }
+				else
+				if (current_player->score == lptr->score)
+				  {
+					current_player->position = position;
+
+					if (!lptr->next)
+					  {
+						lptr->next = current_player;
+						current_player->prev = lptr;
+						*list_end = current_player;
+					  }
+					else
+					  {
+						lptr->next->prev = current_player;
+						current_player->next = lptr->next;
+						lptr->next = current_player;
+						current_player->prev = lptr;
+
+						lptr = current_player->next;
+
+						while (lptr)
+						  {
+							++(lptr->position);
+							lptr = lptr->next;
+						  }
+					  }
+
+				  }
+				else
+				if (current_player->score < lptr->score && !lptr->next)
+				  {
+					current_player->position = (position + 1);
+
+					lptr->next = current_player;
+					current_player->prev = lptr;
+					*list_end = current_player;
+
+					break;
+				  }
+				else
+				  {
+					++position;
+					continue;
+				  }
+			  }
+		  }
+	  }
+	else
+	  {
+		for (lptr = *list_head; lptr != NULL; lptr = lptr->next)
+	  	  {
 			if (current_player->score > lptr->score)
 			  {
-				lptr->score = current_player->score;
-				lptr->position = current_player->position;
-				lptr->highest_level = level;
-				time(&lptr->when);
-				lptr->num_eaten = current_player->num_eaten;
-				BEAT_OWN_SCORE = 1;
-				inserted = 1;
+				current_player->position = position;
+
+				if (lptr == *list_head) // new all time best
+		  		  {
+					NEW_BEST_PLAYER = 1;
+
+					lptr->prev = current_player;
+					current_player->next = lptr;
+		  		  }
+				else
+				  {
+					lptr->prev->next = current_player;
+					current_player->prev = lptr->prev;
+					current_player->next = lptr;
+					lptr->prev = current_player;
+				  }
+
+				while (lptr)
+				  {
+					++(lptr->position);
+					lptr = lptr->next;
+				  }
+
+				break;
+			  }
+			else
+			if (current_player->score == lptr->score)
+			  {
+				current_player->position = position;
+
+				if (!lptr->next)
+				  {
+					lptr->next = current_player;
+					current_player->prev = lptr;
+					*list_end = current_player;
+				  }
+				else
+				  {
+					lptr->next->prev = current_player;
+					current_player->next = lptr->next;
+					lptr->next = current_player;
+					current_player->prev = lptr;
+
+					lptr = current_player->next;
+
+					while (lptr)
+					  {
+						++(lptr->position);
+						lptr = lptr->next;
+					  }
+				  }
+
+			  }
+			else
+			if (current_player->score < lptr->score && !lptr->next)
+			  {
+				current_player->position = (position + 1);
+
+				lptr->next = current_player;
+				current_player->prev = lptr;
+				*list_end = current_player;
+
 				break;
 			  }
 			else
 			  {
-				/* we didn't beat our score, so just stop now */
-				break;
+				++position;
+				continue;
 			  }
 		  }
 
-		if (current_player->score > lptr->score ||
-			current_player->score == lptr->score)
-		  {
-			if (current_player->position == 1)
-				NEW_BEST_PLAYER = 1;
-
-			lptr->prev->next = current_player;
-			current_player->prev = lptr->prev;
-			current_player->next = lptr;
-			lptr->prev = current_player;
-
-			if (current_player->score == lptr->score)
-			  {
-				while (lptr->score == current_player->score && lptr->next != NULL)
-					lptr = lptr->next;
-			  }
-
-			if (current_player->score == lptr->score && lptr->next == NULL)
-			  { inserted = 1; break; }
-
-			while (lptr != NULL)
-			  {
-				++(lptr->position);
-				lptr = lptr->next;
-			  }
-
-			inserted = 1;
-			break;
-		  }
-		else
-		  {
-			++(current_player->position);
-			continue;
-		  }
-	  }
-
-	if (!list_head)
-		 list_head = current_player;
-
-	if (!inserted)
-	  {
-		list_end->next = current_player;
-		current_player->prev = list_end;
-		list_end = current_player;
 	  }
 
 	pthread_mutex_unlock(&list_mutex);
 	return(0);
+
+	fail:
+	return(-1);
 }
 
 // LOG_ERR
@@ -3600,8 +3770,8 @@ void
 save_screen_format(Snake_Head *h, Snake_Tail *t)
 {
 	Snake_Piece		*p = NULL;
-	int			l;
-	int			r, u;
+	int			l = 0;
+	int			r = 0, u = 0;
 
 	r = t->r;
 	u = t->u;
