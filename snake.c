@@ -2253,8 +2253,13 @@ level_three(void)
 	  {
 		for (j = 0; j < col_max; ++j)
 		  {
-			if (i == 0 || i == row_max-1) matrix[i][j] = -1;
-			if (j == 0 || j == col_max-1) matrix[i][j] = -1;
+			if (i == 0 || i == row_max-1)
+				matrix[i][j] = -1;
+			else
+			if (j == 0 || j == col_max-1)
+				matrix[i][j] = -1;
+			else
+				matrix[i][j] = 0;
 		  }
 	  }
 
