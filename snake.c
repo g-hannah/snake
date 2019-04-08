@@ -90,14 +90,14 @@ void debug(char *, ...) __nonnull ((1));
 
 static int get_default_sleep_time(void) __wur;
 static inline void write_stats(void);
-static int write_high_scores(Player *, Player *) __nonnull ((1,2)) __wur;
+static int write_high_scores(Player *, Player *) __nonnull ((1,2));
 static int get_high_scores(Player **, Player **) __nonnull ((1,2)) __wur;
 static void find_player_prev(Player **, Player **, Player *, Player *) __nonnull ((1,2,3,4));
 static void free_high_scores(Player **, Player **) __nonnull ((1,2));
 static Player *new_player_node(void) __wur;
 static int remove_player_node(Player **, Player **, Player **) __nonnull ((1,2,3)) __wur;
 static int show_hall_of_fame(Player *, Player *) __nonnull ((1,2)) __wur;
-static int check_current_player_score(Player *, Player **, Player **) __nonnull ((1,2,3)) __wur;
+static int check_current_player_score(Player *, Player **, Player **) __nonnull ((1,2,3));
 
 static void save_screen_format(Snake_Head *, Snake_Tail *) __nonnull ((1,2));
 static void restore_screen_format(void);
@@ -402,7 +402,7 @@ main(int argc, char *argv[])
 			pthread_mutex_unlock(&mutex);
 
 			if (player_list)
-				if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
+				check_current_player_score(player, &(player_list->first), &(player_list->last));
 			exit(EXIT_SUCCESS);
 		  }
 		else if (thread_failed)
@@ -413,7 +413,7 @@ main(int argc, char *argv[])
 			pthread_mutex_unlock(&mutex);
 
 			if (player_list)
-				if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
+				check_current_player_score(player, &(player_list->first), &(player_list->last));
 			fprintf(stderr, "main: received SIGTERM from worker thread... exiting!\n");
 			goto fail;
 		  }
@@ -683,8 +683,8 @@ main(int argc, char *argv[])
 		if (thread_failed)
 		  {
 			// so that the compiler does not complain about unused result
-			if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0);
-			if (write_high_scores(player_list->first, player_list->last) < 0);
+			check_current_player_score(player, &(player_list->first), &(player_list->last));
+			write_high_scores(player_list->first, player_list->last);
 
 			pthread_kill(tid_snake, SIGTERM);
 			pthread_kill(tid_food, SIGTERM);
@@ -1913,11 +1913,9 @@ game_over(void)
 	char_delay = 90000;
 
 	clear_screen(MENU_BG_COL);
-	if (check_current_player_score(player, &(player_list->first), &(player_list->last)) < 0)
-	  { log_err("game_over: check_current_player error"); goto fail; }
+	check_current_player_score(player, &(player_list->first), &(player_list->last));
 
-	if (write_high_scores(player_list->first, player_list->last) < 0)
-	  { log_err("game_over: write_high_scores error"); goto fail; }
+	write_high_scores(player_list->first, player_list->last);
 
 	if (show_hall_of_fame(player_list->first, player_list->last) < 0)
 	  { log_err("game_over: show_hall_of_fame error"); goto fail; }
