@@ -377,6 +377,7 @@ main(int argc, char *argv[])
 
 	USLEEP_TIME = get_default_sleep_time();
 	USLEEP_VADJUST = (USLEEP_TIME/3);
+	USLEEP_DECREMENT = 10000;
 	clear_screen(MENU_BG_COL);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
@@ -1275,15 +1276,15 @@ put_some_food(void *arg)
 
 	while (!tid_food_end)
 	  {
-		f.r = ((rand()%(f.maxr-1))+1);
-		f.u = ((rand()%(f.maxu-1))+1);
+		f.r = ((rand()%(f.maxr-2))+2);
+		f.u = ((rand()%(f.maxu-2))+2);
 
 		if (within_snake(&f) || (matrix[f.u][f.r] == -1))
 		  {
 			while (within_snake(&f) || (matrix[f.u][f.r] == -1))
 		  	  {
-				f.r = ((rand()%(f.maxr-1))+1);
-				f.u = ((rand()%(f.maxu-1))+1);
+				f.r = ((rand()%(f.maxr-2))+2);
+				f.u = ((rand()%(f.maxu-2))+2);
 		  	  }
 		  }
 
@@ -1835,6 +1836,7 @@ hit_own_body(Snake_Head *h, Snake_Tail *t)
 	return(HIT);
 }
 
+// WITHIN_SNAKE
 int
 within_snake(Food *f)
 {
@@ -3780,7 +3782,7 @@ get_default_sleep_time(void)
 	seconds = 0.09;
 	squares_per_second = (((double)1)/seconds);
 
-	while ((((double)ws.ws_col)/squares_per_second) > FOOD_REFRESH_TIME)
+	while ((((double)ws.ws_col)/squares_per_second) > (FOOD_REFRESH_TIME-2))
 	  {
 		seconds -= 0.01;
 		squares_per_second = (((double)1)/seconds);
