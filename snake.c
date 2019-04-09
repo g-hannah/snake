@@ -1,5 +1,7 @@
 #include "snake.h"
 
+#define STARTING_LENGTH		2
+
 #define log_mutex(str, m) \
 {\
 	;	\
@@ -68,7 +70,8 @@ char			*SN_COL = NULL;
 char			*BR_COL = NULL;
 char			*HD_COL = NULL;
 char			*FD_COL = NULL;
-char			*MENU_BG_COL = NULL;
+char			*TITLE_BG_COL = NULL;
+char			*GAMEOVER_BG_COL = NULL;
 char			*TEXT_SHADOW_COL = NULL;
 int			DEFAULT_USLEEP_TIME = 0;
 int			USLEEP_TIME = 0;
@@ -247,7 +250,9 @@ __attribute__ ((constructor)) snake_init(void)
 
 	FOOD_REFRESH_TIME = 12;
 
-	MENU_BG_COL = BLACK;
+	TITLE_BG_COL = "\e[48;5;238m";
+	GAMEOVER_BG_COL = "\e[48;5;234m";
+	//MENU_BG_COL = BLACK;
 	TEXT_SHADOW_COL = DARK_RED;
 
 	return;
@@ -378,7 +383,7 @@ main(int argc, char *argv[])
 	USLEEP_TIME = get_default_sleep_time();
 	USLEEP_VADJUST = (USLEEP_TIME/3);
 	USLEEP_DECREMENT = 10000;
-	clear_screen(MENU_BG_COL);
+	clear_screen(TITLE_BG_COL);
 
 	if (get_high_scores(&player_list->first, &player_list->last) == -1)
 	  { log_err("main: get_high_scores error"); goto fail; }
@@ -386,13 +391,14 @@ main(int argc, char *argv[])
 	title_screen();
 	up(ws.ws_row/2);
 	right((ws.ws_col/2)-(strlen("Enter Name")/2));
-	printf("%s%sEnter name\e[m", MENU_BG_COL, TRED);
+	printf("%s%sEnter name\e[m", TITLE_BG_COL, TRED);
 	reset_right();
 	reset_up();
 	//down(1);
 	//right(ws.ws_col/2);
 	memset(player->name, 0, 32);
 
+	user_ctrl_c = 0;
 	if (sigsetjmp(main_env, 1) != 0)
 	  {
 		if (user_ctrl_c)
@@ -443,9 +449,9 @@ main(int argc, char *argv[])
 			if (i == 0)
 			  {
 				up((ws.ws_row/2)-1);
-				clear_line(MENU_BG_COL);
+				clear_line(TITLE_BG_COL);
 				right((ws.ws_col/2)-(strlen("No username entered!")/2));
-				printf("%s%sNo username entered!\e[m", MENU_BG_COL, TBLACK);
+				printf("%s%sNo username entered!\e[m", TITLE_BG_COL, TBLACK);
 				reset_right();
 				reset_up();
 				c &= ~c;
@@ -462,9 +468,9 @@ main(int argc, char *argv[])
 			--i;
 			player->name[i] = 0;
 			up((ws.ws_row/2)-1);
-			clear_line(MENU_BG_COL);
+			clear_line(TITLE_BG_COL);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", MENU_BG_COL, TPINK, player->name);
+			printf("%s%s%s\e[m", TITLE_BG_COL, TPINK, player->name);
 			reset_right();
 			reset_up();
 		  }
@@ -474,9 +480,9 @@ main(int argc, char *argv[])
 				continue;
 			player->name[i++] = c;
 			up((ws.ws_row/2)-1);
-			clear_line(MENU_BG_COL);
+			clear_line(TITLE_BG_COL);
 			right((ws.ws_col/2)-(strlen(player->name)/2));
-			printf("%s%s%s\e[m", MENU_BG_COL, TPINK, player->name);
+			printf("%s%s%s\e[m", TITLE_BG_COL, TPINK, player->name);
 			reset_right();
 			reset_up();
 		  }
@@ -542,10 +548,11 @@ main(int argc, char *argv[])
 			int		l1, l2;
 			struct termios	term;
 
-			tid_dir_end = 1;
+			/*tid_dir_end = 1;
+			tid_food_end = 1;*/
+
 			tid_score_end = 1;
-			tid_food_end = 1;
-			EATEN = 1; // ensures first thing done is check value of tid_food_end
+			// ensures first thing done is check value of tid_food_end
 
 			pthread_kill(tid_food, SIGUSR2);
 
@@ -559,13 +566,10 @@ main(int argc, char *argv[])
 			pthread_kill(tid_dir, SIGQUIT);
 			usleep(5000);
 
-			gameover = 0;
+			pthread_mutex_lock(&mutex);
 
 			player->score &= ~(player->score);
 			player->num_eaten &= ~(player->num_eaten);
-
-			log_mutex("lock", "mutex");
-			pthread_mutex_lock(&mutex);
 
 			memset(&term, 0, sizeof(term));
 			tfd = open("/dev/tty", O_RDWR);
@@ -589,7 +593,7 @@ main(int argc, char *argv[])
 			printf("%s%sPlay\e[m", RED, TWHITE);
 			reset_right();
 			right(((ws.ws_col/3)*2) - l2/2);
-			printf("%s%sQuit\e[m", MENU_BG_COL, TWHITE);
+			printf("%s%sQuit\e[m", TITLE_BG_COL, TWHITE);
 			reset_right();
 			reset_up();
 
@@ -607,10 +611,10 @@ main(int argc, char *argv[])
 				  }
 				if (choice[0] == 0x0a)
 				  {
-					log_mutex("unlock", "mutex");
 					pthread_mutex_unlock(&mutex);
 					if (play_again)
 					  {
+						gameover = 0;
 						memset(save_name, 0, 32);
 						strncpy(save_name, player->name, strlen(player->name));
 						save_name[strlen(player->name)] = 0;
@@ -653,7 +657,7 @@ main(int argc, char *argv[])
 					printf("%s%sPlay\e[m", RED, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
-					printf("%s%sQuit\e[m", MENU_BG_COL, TWHITE);
+					printf("%s%sQuit\e[m", GAMEOVER_BG_COL, TWHITE);
 					play_again = 1;
 					quit = 0;
 					for (i = 0; i < 4; ++i) choice[i] = 0;
@@ -664,7 +668,7 @@ main(int argc, char *argv[])
 				  {
 					up((ws.ws_row/2)-(ws.ws_row/16));
 					right((ws.ws_col/3)-l1/2);
-					printf("%s%sPlay\e[m", MENU_BG_COL, TWHITE);
+					printf("%s%sPlay\e[m", GAMEOVER_BG_COL, TWHITE);
 					reset_right();
 					right(((ws.ws_col/3)*2)-l2/2);
 					printf("%s%sQuit\e[m", RED, TWHITE);
@@ -728,7 +732,7 @@ setup_game(void)
 	if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0)
 		goto fail;
 
-	shead.sl = 2;
+	shead.sl = STARTING_LENGTH;
 	change_level(1);
 	//level_one();
 
@@ -778,24 +782,18 @@ snake_thread(void *arg)
 	  }
 
 	go_left:
-	log_mutex("lock", "smutex");
 	pthread_mutex_lock(&smutex);
 	if (shead.h->d != 0x6c)
 		shead.h->d = 0x6c;
-	log_mutex("unlock", "smutex");
 	pthread_mutex_unlock(&smutex);
 
-	log_mutex("lock", "dir_mutex");
 	pthread_mutex_lock(&dir_mutex);
 	DIRECTION = 0x6c;
-	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
 	for (;;)
 	  {
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&mutex);
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 
 		left(1);
@@ -806,9 +804,7 @@ snake_thread(void *arg)
 		if (shead.np > 1)
 			++(shead.h->l);
 
-		log_mutex("unlock", "smutex");
 		pthread_mutex_unlock(&smutex);
-		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
 		if (matrix[shead.u][shead.r] == -1)
@@ -817,10 +813,8 @@ snake_thread(void *arg)
 
 		adjust_tail(&stail, &shead);
 
-		log_mutex("lock", "sleep_mutex");
 		pthread_mutex_lock(&sleep_mutex);
 		sleeptime = USLEEP_TIME;
-		log_mutex("unlock", "sleep_mutex");
 		pthread_mutex_unlock(&sleep_mutex);
 
 		usleep(sleeptime);
@@ -828,11 +822,9 @@ snake_thread(void *arg)
 		if (hit_own_body(&shead, &stail))
 			goto lose;
 
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 		if (shead.r == f.r && shead.u == f.u) // we ate food
 		  {
-			log_mutex("unlock", "smutex");
 			pthread_mutex_unlock(&smutex);
 			EATEN = 1;
 			ate_food = 1;
@@ -849,9 +841,8 @@ snake_thread(void *arg)
 
 		  }
 		else
-		  { log_mutex("unlock", "smutex"); pthread_mutex_unlock(&smutex); }
+		  { pthread_mutex_unlock(&smutex); }
 
-		log_mutex("lock", "dir_mutex");
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x6c)
 		  {
@@ -873,30 +864,23 @@ snake_thread(void *arg)
 				DIRECTION = 0x6c;
 			  }
 		  }
-		log_mutex("unlock", "dir_mutex");
 		pthread_mutex_unlock(&dir_mutex);
 	  }
 
 	go_up:
-	log_mutex("lock", "smutex");
 	pthread_mutex_lock(&smutex);
 	if (shead.h->d != 0x75)
 		shead.h->d = 0x75;
-	log_mutex("unlock", "smutex");
 	pthread_mutex_unlock(&smutex);
 
-	log_mutex("lock", "dir_mutex");
 	pthread_mutex_lock(&dir_mutex);
 	DIRECTION = 0x75;
-	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
 	USLEEP_TIME += USLEEP_VADJUST;
 	for (;;)
 	  {
-		log_mutex("lock", "mutex");
 		pthread_mutex_lock(&mutex);
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 
 		up(1);
@@ -910,33 +894,24 @@ snake_thread(void *arg)
 		if (shead.np > 1)
 			++(shead.h->l);
 
-		log_mutex("unlock", "smutex");
 		pthread_mutex_unlock(&smutex);
-		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
-		if (matrix[shead.u][shead.r] == -1)
-		//if (shead.u > maxu)
+		if (matrix[shead.u][shead.r] == -1
+			|| hit_own_body(&shead, &stail))
 			goto lose;
 
 		adjust_tail(&stail, &shead);
 
-		log_mutex("lock", "sleep_mutex");
 		pthread_mutex_lock(&sleep_mutex);
 		sleeptime = USLEEP_TIME;
-		log_mutex("unlock", "sleep_mutex");
 		pthread_mutex_unlock(&sleep_mutex);
 
 		usleep(sleeptime);
 
-		if (hit_own_body(&shead, &stail))
-			goto lose;
-
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 		if (shead.r == f.r && shead.u == f.u) // we ate food
 		  {
-			log_mutex("unlock", "smutex");
 			pthread_mutex_unlock(&smutex);
 			EATEN = 1;
 			ate_food = 1;
@@ -953,9 +928,8 @@ snake_thread(void *arg)
 
 		  }
 		else
-		  { log_mutex("unlock", "smutex"); pthread_mutex_unlock(&smutex); }
+		  { pthread_mutex_unlock(&smutex); }
 
-		log_mutex("lock", "dir_mutex");
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x75)
 		  {
@@ -964,13 +938,11 @@ snake_thread(void *arg)
 			  {
 				case(0x6c):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_left;
 				break;
 				case(0x72):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_right;
 				break;
@@ -978,30 +950,23 @@ snake_thread(void *arg)
 				DIRECTION = 0x75;
 			  }
 		  }
-		log_mutex("unlock", "dir_mutex");
 		pthread_mutex_unlock(&dir_mutex);
 	  }
 
 	go_down:
-	log_mutex("lock", "smutex");
 	pthread_mutex_lock(&smutex);
 	if (shead.h->d != 0x64)
 		shead.h->d = 0x64;
-	log_mutex("unlock", "smutex");
 	pthread_mutex_unlock(&smutex);
 
-	log_mutex("lock", "dir_mutex");
 	pthread_mutex_lock(&dir_mutex);
 	DIRECTION = 0x64;
-	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
 	USLEEP_TIME += USLEEP_VADJUST;
 	for (;;)
 	  {
-		log_mutex("lock", "mutex");
 		pthread_mutex_lock(&mutex);
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 
 		down(1);
@@ -1015,33 +980,24 @@ snake_thread(void *arg)
 		if (shead.np > 1)
 			++(shead.h->l);
 
-		log_mutex("unlock", "smutex");
 		pthread_mutex_unlock(&smutex);
-		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
-		if (matrix[shead.u][shead.r] == -1)
-		//if (shead.u < minu)
+		if (matrix[shead.u][shead.r] == -1
+			|| hit_own_body(&shead, &stail))
 			goto lose;
 
 		adjust_tail(&stail, &shead);
 
-		log_mutex("lock", "sleep_mutex");
 		pthread_mutex_lock(&sleep_mutex);
 		sleeptime = USLEEP_TIME;
-		log_mutex("unlock", "sleep_mutex");
 		pthread_mutex_unlock(&sleep_mutex);
 
 		usleep(sleeptime);
 
-		if (hit_own_body(&shead, &stail))
-			goto lose;
-
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 		if (shead.r == f.r && shead.u == f.u) // we ate food
 		  {
-			log_mutex("unlock", "smutex");
 			pthread_mutex_unlock(&smutex);
 			EATEN = 1;
 			ate_food = 1;
@@ -1057,9 +1013,8 @@ snake_thread(void *arg)
 			  }
 		  }
 		else
-		  { log_mutex("unlock", "smutex"); pthread_mutex_unlock(&smutex); }
+		  { pthread_mutex_unlock(&smutex); }
 
-		log_mutex("lock", "dir_mutex");
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x64)
 		  {
@@ -1068,13 +1023,11 @@ snake_thread(void *arg)
 			  {
 				case(0x6c):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_left;
 				break;
 				case(0x72):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_right;
 				break;
@@ -1082,29 +1035,22 @@ snake_thread(void *arg)
 				DIRECTION = 0x64;
 			  }
 		  }
-		log_mutex("unlock", "dir_mutex");
 		pthread_mutex_unlock(&dir_mutex);
 	  }
 
 	go_right:
-	log_mutex("lock", "smutex");
 	pthread_mutex_lock(&smutex);
 	if (shead.h->d == 0)
 		shead.h->d = 0x72;
-	log_mutex("unlock", "smutex");
 	pthread_mutex_unlock(&smutex);
 
-	log_mutex("lock", "&dir_mutex");
 	pthread_mutex_lock(&dir_mutex);
 	DIRECTION = 0x72;
-	log_mutex("unlock", "dir_mutex");
 	pthread_mutex_unlock(&dir_mutex);
 
 	for (;;)
 	  {
-		log_mutex("lock", "mutex");
 		pthread_mutex_lock(&mutex);
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 
 		right(1);
@@ -1115,33 +1061,24 @@ snake_thread(void *arg)
 		if (shead.np > 1)
 			++(shead.h->l);
 
-		log_mutex("unlock", "smutex");
 		pthread_mutex_unlock(&smutex);
-		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
-		if (matrix[shead.u][shead.r] == -1)
-		//if (shead.r > maxr)
+		if (matrix[shead.u][shead.r] == -1
+			|| hit_own_body(&shead, &stail))
 			goto lose;
 
 		adjust_tail(&stail, &shead);
 
-		log_mutex("lock", "sleep_mutex");
 		pthread_mutex_lock(&sleep_mutex);
 		sleeptime = USLEEP_TIME;
-		log_mutex("unlock", "sleep_mutex");
 		pthread_mutex_unlock(&sleep_mutex);
 
 		usleep(sleeptime);
 
-		if (hit_own_body(&shead, &stail))
-			goto lose;
-
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 		if (shead.r == f.r && shead.u == f.u) // we ate food
 		  {
-			log_mutex("unlock", "smutex");
 			pthread_mutex_unlock(&smutex);
 			EATEN = 1;
 			ate_food = 1;
@@ -1158,9 +1095,8 @@ snake_thread(void *arg)
 
 		  }
 		else
-		  { log_mutex("unlock", "smutex"); pthread_mutex_unlock(&smutex); }
+		  { pthread_mutex_unlock(&smutex); }
 
-		log_mutex("lock", "dir_mutex");
 		pthread_mutex_lock(&dir_mutex);
 		if (DIRECTION != 0x72)
 		  {
@@ -1168,13 +1104,11 @@ snake_thread(void *arg)
 			  {
 				case(0x75):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_up;
 				break;
 				case(0x64):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_down;
 				break;
@@ -1182,13 +1116,17 @@ snake_thread(void *arg)
 				DIRECTION = 0x72;
 			  }
 		  }
-		log_mutex("unlock", "dir_mutex");
 		pthread_mutex_unlock(&dir_mutex);
 	  }
 
 	lose:
-	//pthread_kill(tid_food, SIGINT);
-	//pthread_kill(tid_dir, SIGINT);
+	tid_food_end = 1;
+	tid_dir_end = 1;
+	gameover = 1;
+
+	pthread_kill(tid_food, SIGFPE);
+	pthread_kill(tid_dir, SIGQUIT);
+
 	if (game_over() == -1)
 	  {
 		log_err("snake_thread: game_over error");
@@ -1196,7 +1134,6 @@ snake_thread(void *arg)
 		pthread_exit((void *)-1);
 	  }
 
-	gameover = 1;
 	pthread_exit((void *)0);
 }
 // SNAKE_END
@@ -1239,15 +1176,15 @@ update_sleep(void *arg)
 	  }
 }*/
 
+sigjmp_buf	__food_env__;
+
 static void
 put_some_food_sig_handler(int signo)
 {
-	/* We just need to return and nothing more;
-	 * the snake ate the food; so interrupt this
-	 * worker thread from sleep() and let it put
-	 * another piece of food on the screen
-	 */
-	return;
+	if (signo == SIGFPE)
+		siglongjmp(__food_env__, 1);
+	else
+		return;
 }
 
 // PUT_SOME_FOOD
@@ -1255,13 +1192,28 @@ void *
 put_some_food(void *arg)
 {
 	struct sigaction	sigusr2;
+	struct sigaction	sigfpe;
+	int			locked;
 
+	locked = 0;
 	memset(&sigusr2, 0, sizeof(sigusr2));
+	memset(&sigfpe, 0, sizeof(sigfpe));
 
 	sigusr2.sa_handler = put_some_food_sig_handler;
 	sigusr2.sa_flags = 0;
 	sigemptyset(&sigusr2.sa_mask);
+
+	sigfpe.sa_handler = put_some_food_sig_handler;
+	sigfpe.sa_flags = 0;
+	sigemptyset(&sigfpe.sa_mask);
+
 	if (sigaction(SIGUSR2, &sigusr2, NULL) < 0)
+	  {
+		pthread_kill(tid_main, SIGTERM);
+		pthread_exit((void *)-1);
+	  }
+
+	if (sigaction(SIGFPE, &sigfpe, NULL) < 0)
 	  {
 		pthread_kill(tid_main, SIGTERM);
 		pthread_exit((void *)-1);
@@ -1273,6 +1225,11 @@ put_some_food(void *arg)
 	f.maxu = ws.ws_row-1;
 	f.minu = 1;
 	f.u = f.r = 1;
+
+	if (sigsetjmp(__food_env__, 1) != 0)
+	  {
+		tid_food_end = 1;
+	  }
 
 	while (!tid_food_end)
 	  {
@@ -1290,11 +1247,10 @@ put_some_food(void *arg)
 
 		EATEN = 0;
 
-		log_mutex("lock", "mutex");
 		pthread_mutex_lock(&mutex);
-		log_mutex("lock", "smutex");
 		pthread_mutex_lock(&smutex);
 
+		locked = 1;
 		reset_cursor();
 		up(f.u);
 		right(f.r);
@@ -1303,20 +1259,18 @@ put_some_food(void *arg)
 		up(shead.u);
 		right(shead.r);
 
-		log_mutex("unlock", "smutex");
 		pthread_mutex_unlock(&smutex);
-		log_mutex("unlock", "mutex");
 		pthread_mutex_unlock(&mutex);
 
+		locked &= ~locked;
 		sleep(FOOD_REFRESH_TIME);
 	
 		if (!EATEN)
 		  {
-			log_mutex("lock", "mutex");
 			pthread_mutex_lock(&mutex);
-			log_mutex("lock", "smutex");
 			pthread_mutex_lock(&smutex);
 
+			locked = 1;
 			reset_cursor();
 			up(f.u);
 			right(f.r);
@@ -1325,17 +1279,22 @@ put_some_food(void *arg)
 			up(shead.u);
 			right(shead.r);
 
-			log_mutex("unlock", "smutex");
 			pthread_mutex_unlock(&smutex);
-			log_mutex("unlock", "mutex");
 			pthread_mutex_unlock(&mutex);
+
+			locked &= ~locked;
 		  }
 	  }
 
+	if (locked)
+	  {
+		pthread_mutex_unlock(&smutex);
+		pthread_mutex_unlock(&mutex);
+		locked &= ~locked;
+	  }
 	pthread_exit((void *)0);
 }
 
-/* when this is called, screen mutex is already locked */
 // ADJUST_TAIL
 void
 adjust_tail(Snake_Tail *t, Snake_Head *h)
@@ -1784,6 +1743,7 @@ get_direction(void *arg)
 	pthread_exit((void *)-1);
 }
 
+// HIT_OWN_BODY
 int
 hit_own_body(Snake_Head *h, Snake_Tail *t)
 {
@@ -1914,15 +1874,17 @@ game_over(void)
 
 	char_delay = 90000;
 
-	clear_screen(MENU_BG_COL);
+	pthread_mutex_lock(&mutex);
+	clear_screen(GAMEOVER_BG_COL);
 	check_current_player_score(player, &(player_list->first), &(player_list->last));
 
 	write_high_scores(player_list->first, player_list->last);
 
+	pthread_mutex_unlock(&mutex);
 	if (show_hall_of_fame(player_list->first, player_list->last) < 0)
 	  { log_err("game_over: show_hall_of_fame error"); goto fail; }
-
 	pthread_mutex_lock(&mutex);
+
 	reset_cursor();
 
 	if (NEW_BEST_PLAYER)
@@ -1930,7 +1892,7 @@ game_over(void)
 		up(row_max - row_16);
 
 		center_x((strlen(beat_record_string)/2)+4, 0);
-		printf("%s%s!!! %s !!!\e[m", MENU_BG_COL, TPINK, beat_record_string);
+		printf("%s%s!!! %s !!!\e[m", GAMEOVER_BG_COL, TPINK, beat_record_string);
 		reset_right();
 		reset_up();
 	  }
@@ -1939,7 +1901,7 @@ game_over(void)
 		up(row_max - row_16);
 
 		center_x((strlen(beat_own_score_string)/2)+4, 0);
-		printf("%s%s!!! %s !!!\e[m", MENU_BG_COL, TPINK, beat_own_score_string);
+		printf("%s%s!!! %s !!!\e[m", GAMEOVER_BG_COL, TPINK, beat_own_score_string);
 		reset_right();
 		reset_up();
 	  }
@@ -1954,7 +1916,7 @@ game_over(void)
 			if (game_over_text[i][j] == 1)
 				draw_line_x(RED, 1, 0);
 			else if (game_over_text[i][j] == 2)
-				draw_line_x(MENU_BG_COL, 1, 0);
+				draw_line_x(GAMEOVER_BG_COL, 1, 0);
 			else
 				draw_line_x(TEXT_SHADOW_COL, 1, 0);
 		  }
@@ -1968,7 +1930,7 @@ game_over(void)
 	down(2);
 
 	right((ws.ws_col/2)-(strlen(your_score_string)/2)-4);
-	printf("%s%s", MENU_BG_COL, TGREEN);
+	printf("%s%s", GAMEOVER_BG_COL, TGREEN);
 	for (i = 0; i < strlen(your_score_string); ++i)
 	  { fputc(your_score_string[i], stdout); usleep(char_delay); }
 
@@ -2019,7 +1981,7 @@ game_over(void)
 	reset_right();
 	down(1);
 	right((ws.ws_col/2)-(strlen(your_num_eaten_string)/2)-4);
-	printf("%s%s", MENU_BG_COL, TGREEN);
+	printf("%s%s", GAMEOVER_BG_COL, TGREEN);
 	for (i = 0; i < strlen(your_num_eaten_string); ++i)
 	  { fputc(your_num_eaten_string[i], stdout); usleep(char_delay); }
 
@@ -2184,6 +2146,8 @@ level_two(void)
 	HD_COL = DARK_GREY;
 	FD_COL = PURPLE;
 
+	pthread_kill(tid_food, SIGUSR2);
+
 	pthread_mutex_lock(&mutex);
 
 	for (i = 0; i < ws.ws_row; ++i)
@@ -2246,6 +2210,8 @@ level_three(void)
 	SN_COL = GREEN;
 	HD_COL = DARK_RED;
 	FD_COL = DARK_GREY;
+
+	pthread_kill(tid_food, SIGUSR2);
 
 	pthread_mutex_lock(&mutex);
 
@@ -2319,6 +2285,8 @@ level_four(void)
 	SN_COL = DARK_RED;
 	HD_COL = WHITE;
 	FD_COL = SALMON;
+
+	pthread_kill(tid_food, SIGUSR2);
 
 	pthread_mutex_lock(&mutex);
 
@@ -2406,6 +2374,8 @@ level_five(void)
 	HD_COL = DARK_RED;
 	FD_COL = GREEN;
 
+	pthread_kill(tid_food, SIGUSR2);
+
 	pthread_mutex_lock(&mutex);
 
 	for (i = 0; i < ws.ws_row; ++i)
@@ -2454,7 +2424,7 @@ level_five(void)
 	USLEEP_TIME -= USLEEP_DECREMENT;
 	USLEEP_VADJUST = (USLEEP_TIME/3);
 
-	
+	pthread_kill(tid_food, SIGUSR2);
 }
 
 // RESET_SNAKE
@@ -2681,6 +2651,11 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 	reset_cursor();
 
+	/* Here, if the starting position for the head
+	 * is on a -1 element of the matrix, this will
+	 * find the best direction to move in to find
+	 * the nearest zero square
+	 */
 	if (matrix[head_u][head_r] == -1)
 	  {
 		bad_r = 0;
@@ -2767,6 +2742,12 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 	h->h->d = dir;
 
+	/* So we found the best forward direction (i.e.,
+	 * the direction the snake will actually be moving
+	 * in. So then we set the direction to the opposite
+	 * for the next part because we are going to draw
+	 * the snake backwards from head to tail
+	 */
 	switch(dir)
 	  {
 		case(0x75):
@@ -2787,10 +2768,6 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 		break;
 	  }
 
-	/* Now we should have gotten the best FORWARD direction for the snake;
-	 * we just have to then find an acceptable path backwards in the screen
-	 * matrix representation
-	 */
 	reset_right();
 	reset_up();
 
@@ -2828,7 +2805,9 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 		switch(dir)
 		  {
 			case(0x6c):
-			while (matrix[head_u][(head_r-1)] != -1 && head_r > 0)
+			while (matrix[head_u][(head_r-1)] != -1
+				&& matrix[head_u][(head_r-1)] != 1
+				&& head_r > 0)
 			  {
 				matrix[head_u][--head_r] = 1;
 				++slen; ++(t->t->l);
@@ -2840,14 +2819,18 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 			save_u = head_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u < maxu)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[(head_u+1)][head_r] != 1
+				&& head_u < maxu)
 				++head_u;
 
 			delta_u = (head_u - save_u);
 
 			head_u = save_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u > minu)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[(head_u-1)][head_r] != 1
+				&& head_u > minu)
 				--head_u;
 
 			delta_d = (save_u - head_u);
@@ -2873,10 +2856,13 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 			reset_up();
 			up(head_u);
 			right(head_r);
-			draw_line_x(PINK, 1, 0);*/
+			draw_line_x(PINK, 1, 0);
+			left(1);*/
 			break;
 			case(0x72):
-			while (matrix[head_u][(head_r+1)] != -1 && head_r < maxr)
+			while (matrix[head_u][(head_r+1)] != -1
+				&& matrix[head_u][(head_r+1)] != 1
+				&& head_r < maxr)
 			  {
 				matrix[head_u][++head_r] = 1;
 				++slen; ++(t->t->l);
@@ -2888,14 +2874,18 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 			save_u = head_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u < maxu)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[(head_u+1)][head_r] != 1
+				&& head_u < maxu)
 				++head_u;
 
 			delta_u = (head_u - save_u);
 
 			head_u = save_u;
 
-			while (matrix[head_u][head_r] != -1 && head_u > minu)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[(head_u-1)][head_r] != 1
+				&& head_u > minu)
 				--head_u;
 
 			delta_d = (save_u - head_u);
@@ -2922,10 +2912,13 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 			reset_up();
 			up(head_u);
 			right(head_r);
-			draw_line_x(PINK, 1, 0);*/
+			draw_line_x(PINK, 1, 0);
+			left(1);*/
 			break;
 			case(0x64):
-			while (matrix[(head_u-1)][head_r] != -1 && head_u > minu)
+			while (matrix[(head_u-1)][head_r] != -1
+				&& matrix[(head_u-1)][head_r] != 1
+				&& head_u > minu)
 			  {
 				matrix[--head_u][head_r] = 1;
 				++slen; ++(t->t->l);
@@ -2937,14 +2930,18 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 			save_r = head_r;
 
-			while (matrix[head_u][head_r] != -1 && head_r > minr)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[head_u][(head_r-1)] != 1
+				&& head_r > minr)
 				--head_r;
 
 			delta_l = (save_r - head_r);
 
 			head_r = save_r;
 
-			while (matrix[head_u][head_r] != -1 && head_r < maxr)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[head_u][(head_r+1)] != 1
+				&& head_r < maxr)
 				++head_r;
 
 			delta_r = (head_r - save_r);
@@ -2970,10 +2967,13 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 			reset_up();
 			up(head_u);
 			right(head_r);
-			draw_line_x(PINK, 1, 0);*/
+			draw_line_x(PINK, 1, 0);
+			left(1);*/
 			break;
 			case(0x75):
-			while (matrix[(head_u+1)][head_r] != -1 && head_u < maxu)
+			while (matrix[(head_u+1)][head_r] != -1
+				&& matrix[(head_u+1)][head_r] != 1
+				&& head_u < maxu)
 			  {
 				matrix[++head_u][head_r] = 1;
 				++slen; ++(t->t->l);
@@ -2985,14 +2985,18 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 			save_r = head_r;
 
-			while (matrix[head_u][head_r] != -1 && head_r > minr)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[head_u][(head_r-1)] != 1
+				&& head_r > minr)
 				--head_r;
 
 			delta_l = (save_r - head_r);
 
 			head_r = save_r;
 
-			while (matrix[head_u][head_r] != -1 && head_r > maxr)
+			while (matrix[head_u][head_r] != -1
+				&& matrix[head_u][(head_r+1)] != 1
+				&& head_r < maxr)
 				++head_r;
 
 			delta_r = (head_r - save_r);
@@ -3018,10 +3022,11 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 			reset_up();
 			up(head_u);
 			right(head_r);
-			draw_line_x(PINK, 1, 0);*/
+			draw_line_x(PINK, 1, 0);
+			left(1);*/
 			break;
 		  }
-		//usleep(500000);
+		//usleep(900000);
 	  }
 
 	fini:
@@ -3067,6 +3072,98 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 
 	pthread_mutex_unlock(&smutex);
 	pthread_mutex_unlock(&mutex);
+
+	/*Snake_Piece	*p = NULL;
+
+	pthread_mutex_lock(&mutex);
+	pthread_mutex_lock(&smutex);
+
+	reset_cursor();
+
+	for (p = t->t; p; p = p->next)
+	  {
+		if (! p->prev)
+		  {
+			printf("tail: u == %d: r == %d",
+				t->u, t->r);
+
+			reset_right();
+			reset_up();
+
+			up(t->u);
+			right(t->r);
+
+			draw_line_x(BLACK, 1, 0);
+
+			reset_cursor();
+
+			printf("tail apex: u == %d: r == %d",
+				p->apex_u, p->apex_r);
+
+			reset_cursor();
+
+			up(p->apex_u);
+			right(p->apex_r);
+
+			draw_line_x(BLACK, 1, 0);
+
+			reset_cursor();
+			sleep(2);
+		  }
+		else
+		if (! p->next)
+		  {
+			printf("head: u == %d: r == %d",
+				h->u, h->r);
+
+			reset_right();
+			reset_up();
+
+			up(h->u);
+			right(h->r);
+
+			draw_line_x(PINK, 1, 0);
+
+			reset_cursor();
+
+			printf("head apex: u == %d: r == %d",
+				p->apex_u, p->apex_r);
+
+			reset_right();
+			reset_up();
+
+			up(p->apex_u);
+			right(p->apex_r);
+
+			draw_line_x(BLACK, 1, 0);
+
+			reset_cursor();
+
+			sleep(2);
+		  }
+		else
+		  {
+			printf("apex_r == %d: apex_u == %d",
+				p->apex_r, p->apex_r);
+
+			reset_right();
+			reset_up();
+
+			up(p->apex_u);
+			right(p->apex_r);
+
+			draw_line_x(BLACK, 1, 0);
+
+			reset_cursor();
+			sleep(2);
+		  }
+	  }
+
+	pthread_mutex_unlock(&smutex);
+	pthread_mutex_unlock(&mutex);
+
+	sleep(60);*/
+
 	return;
 }
 
@@ -3282,7 +3379,7 @@ title_screen(void)
 			if (game_title[i][j] == 1)
 				draw_line_x(RED, 1, 0);
 			else if (game_title[i][j] == 2)
-				draw_line_x(MENU_BG_COL, 1, 0);
+				draw_line_x(TITLE_BG_COL, 1, 0);
 			else
 				draw_line_x(TEXT_SHADOW_COL, 1, 0);
 		  }
@@ -3488,14 +3585,14 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 
 	up((ws.ws_row/2)-(ws.ws_row/8));
 	right((ws.ws_col/2)-(strlen("Hall of Fame")/2));
-	printf("%s%sHall of Fame\e[m", MENU_BG_COL, TORANGE);
+	printf("%s%sHall of Fame\e[m", (gameover?GAMEOVER_BG_COL:TITLE_BG_COL), TORANGE);
 	reset_right();
 	down(2);
 	right((ws.ws_col/2)-(76/2));
 
 	pthread_mutex_lock(&list_mutex);
 	if (!list_head)
-		printf("%s%s     No hall of famers! :(\e[m\n", MENU_BG_COL, TSKY_BLUE);
+		printf("%s%s     No hall of famers! :(\e[m\n", (gameover?GAMEOVER_BG_COL:TITLE_BG_COL), TSKY_BLUE);
 
 	else
 	  {
@@ -3509,7 +3606,8 @@ show_hall_of_fame(Player *list_head, Player *list_end)
 			  { log_err("show_hall_of_fame: strftime error"); goto fail; }
 
 			printf("%s%s%s#%d %s%s %*.*s%s Score: %s%6d%s | Food: %s%4d%s | Level: %s%d %s(%s%s%s)\e[m",
-				MENU_BG_COL, TPINK,
+				(gameover?GAMEOVER_BG_COL:TITLE_BG_COL),
+				TPINK,
 				(ptr->position<10?" ":""),
 				ptr->position,
 				TTEAL, ptr->name,
