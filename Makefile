@@ -1,13 +1,22 @@
 CC=gcc
 WFLAGS=-Wall -Werror
-CFILES=snake.c
-OFILES=snake.o
-LIBS=-lscreenlib -lpthread
+LIBS=-lscreen -lpthread
+DEBUG := 0
 
-snake: snake.o
-	$(CC) -O2 -o snake $(WFLAGS) $(OFILES) $(LIBS)
-snake.o: snake.c
-	$(CC) -O2 -c $(WFLAGS) $(CFILES)
+SOURCE_FILES := \
+	snake.c
+
+OBJECT_FILES := ${SOURCE_FILES:.c=.o}
+
+snake: $(OBJECT_FILES)
+	$(CC) $(WFLAGS) -o snake $(OBJECT_FILES) $(LIBS)
+
+$(OBJECT_FILES): $(SOURCE_FILES)
+ifeq ($(DEBUG), 1)
+	$(CC) $(WFLAGS) -DDEBUG -g -c $^
+else
+	$(CC) $(WFLAGS) -c $^
+endif
 
 clean:
 	rm *.o
