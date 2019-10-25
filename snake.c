@@ -719,7 +719,7 @@ setup_game(void)
 		stail.t = shead.h;
 	  }
 
-	log_mutex("unlock", "smutex");
+	//log_mutex("unlock", "smutex");
 	pthread_mutex_unlock(&smutex);
 
 	if (pthread_attr_init(&attr) != 0)
@@ -845,12 +845,12 @@ snake_thread(void *arg)
 			  {
 				case(0x75):
 				grow_head(&shead);
-				log_mutex("unlock", "dir_mutex");
+				//log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				goto go_up;
 				break;
 				case(0x64):
-				log_mutex("unlock", "dir_mutex");
+				//log_mutex("unlock", "dir_mutex");
 				pthread_mutex_unlock(&dir_mutex);
 				grow_head(&shead);
 				goto go_down;
