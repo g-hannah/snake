@@ -1,4 +1,4 @@
-#include <screenlib.h>
+#include <screen.h>
 #include <assert.h>
 #include <fcntl.h>
 #ifndef _ERRNO_H
