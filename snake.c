@@ -1152,25 +1152,6 @@ track_score(void *arg)
 	pthread_exit((void *)0);
 }
 
-/*void *
-update_sleep(void *arg)
-{
-	for (;;)
-	  {
-		sleep(25);
-		if (USLEEP_TIME > 50000)
-		  {
-			pthread_mutex_lock(&sleep_mutex);
-			USLEEP_TIME -= 10000;
-			pthread_mutex_unlock(&sleep_mutex);
-		  }
-		else
-		  {
-			sleep(0xdeadbeef);
-		  }
-	  }
-}*/
-
 sigjmp_buf	__food_env__;
 
 static void
@@ -3162,46 +3143,6 @@ calibrate_snake_position(Snake_Head *h, Snake_Tail *t)
 	return;
 }
 
-// GET_COLOUR
-/*char *
-get_colour(char *col)
-{
-	if (strcasecmp("blue", col) == 0)
-		return(BLUE);
-	else if (strcasecmp("yellow", col) == 0)
-		return(YELLOW);
-	else if (strcasecmp("orange", col) == 0)
-		return(ORANGE);
-	else if (strcasecmp("green", col) == 0)
-		return(GREEN);
-	else if (strcasecmp("black", col) == 0)
-		return(BLACK);
-	else if (strcasecmp("white", col) == 0)
-		return(WHITE);
-	else if (strcasecmp("olive", col) == 0)
-		return(OLIVE);
-	else if (strcasecmp("aqua", col) == 0)
-		return(AQUA);
-	else if (strcasecmp("salmon", col) == 0)
-		return(SALMON);
-	else if (strcasecmp("red", col) == 0)
-		return(RED);
-	else if (strcasecmp("darkred", col) == 0)
-		return(DARK_RED);
-	else if (strcasecmp("grey", col) == 0)
-		return(GREY);
-	else if (strcasecmp("darkgrey", col) == 0)
-		return(DARK_GREY);
-	else if (strcasecmp("lightgrey", col) == 0)
-		return(LIGHT_GREY);
-	else if (strcasecmp("pink", col) == 0)
-		return(PINK);
-	else if (strcasecmp("darkgreen", col) == 0)
-		return(DARK_GREEN);
-	else
-		return(NULL);
-}*/
-
 // WRITE_HIGH_SCORES
 int
 write_high_scores(Player *list_head, Player *list_end)
@@ -3991,9 +3932,12 @@ strip_crnl(char *line)
 	l = strlen(line);
 
 	p = (line + (l - 1));
-	if (*p != 0x0d && *p != 0x0a) return;
 
-	while ((*p == 0x0d || *p == 0x0a) && p > (line + 1)) --p;
+	if (*p != 0x0d && *p != 0x0a)
+		return;
+
+	while ((*p == 0x0d || *p == 0x0a) && p > (line + 1))
+		--p;
 
 	++p;
 
