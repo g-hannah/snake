@@ -2,11 +2,6 @@
 
 #define STARTING_LENGTH		2
 
-#define log_mutex(str, m) \
-{\
-	;	\
-}
-
 int			DEBUG;
 FILE			*debug_fp = NULL;
 
